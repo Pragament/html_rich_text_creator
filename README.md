@@ -1,1 +1,1 @@
-# html_question_paper_creator
+# html_rich_text_creator
