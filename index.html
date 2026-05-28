@@ -699,6 +699,15 @@
             tocContainer.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:20px;">No headings yet</div>';
             return;
         }
+
+        function getImageSrcLabel(src, index) {
+            if (src.startsWith('data:')) {
+                const mimeMatch = src.match(/^data:([^;]+)/);
+                const mime = mimeMatch ? mimeMatch[1] : 'image';
+                return `Image ${index + 1}: ${mime} data URL`;
+            }
+            return src.length > 90 ? `${src.slice(0, 87)}...` : src;
+        }
         
         function renderNode(node, level) {
             const nodeKey = node.id;
@@ -749,8 +758,8 @@
                     if (!image.src) return;
                     const srcSpan = document.createElement('span');
                     srcSpan.className = 'toc-image-src';
-                    srcSpan.innerText = image.src;
-                    srcSpan.title = image.src;
+                    srcSpan.innerText = getImageSrcLabel(image.src, image.index);
+                    srcSpan.title = image.src.startsWith('data:') ? 'Embedded image data URL' : image.src;
                     srcSpan.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const targetElem = document.getElementById(node.id);
@@ -820,7 +829,7 @@
         enhanceTables();
         renderTOC();
     });
-    observer.observe(editor, { childList: true, subtree: true, characterData: true, attributes: true });
+    observer.observe(editor, { childList: true, subtree: true, characterData: true });
     
     // Listen to selection changes to update heading dropdown
     document.addEventListener('selectionchange', () => {
@@ -956,8 +965,8 @@
     function syncImageSizeData(img) {
         const width = Math.round(img.getBoundingClientRect().width || parseFloat(img.style.width) || img.naturalWidth || 400);
         const height = Math.round(img.getBoundingClientRect().height || img.naturalHeight || 300);
-        img.dataset.docxWidth = width;
-        img.dataset.docxHeight = height;
+        if (img.dataset.docxWidth !== String(width)) img.dataset.docxWidth = width;
+        if (img.dataset.docxHeight !== String(height)) img.dataset.docxHeight = height;
     }
 
     function createImageResizer(img) {
