@@ -116,6 +116,16 @@
         .toc-title.h2 { margin-left: 4px; font-weight: 500; }
         .toc-title.h3 { margin-left: 8px; font-size: 0.8rem; color: #475569; }
         .toc-title.h4 { margin-left: 12px; font-size: 0.75rem; color: #64748b; }
+        .toc-image-src {
+            display: block;
+            margin: 3px 0 4px 36px;
+            font-size: 0.68rem;
+            color: #64748b;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+        }
         .children-container {
             margin-left: 24px;
             display: block;
@@ -229,6 +239,84 @@
         .rich-editor h4 { font-size: 1.1rem; margin: 0.5rem 0; color: #475569; font-style: italic; }
         .rich-editor ul, .rich-editor ol { margin: 0.5rem 0; padding-left: 2rem; }
         .rich-editor img { max-width: 100%; border-radius: 12px; margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .image-resizer {
+            display: inline-block;
+            position: relative;
+            max-width: 100%;
+            line-height: 0;
+            margin: 8px 0;
+        }
+        .image-resizer img {
+            display: block;
+            margin: 0;
+        }
+        .image-resize-handle {
+            position: absolute;
+            right: -6px;
+            bottom: -6px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: 2px solid white;
+            cursor: nwse-resize;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+        }
+        .rich-editor table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+        }
+        .rich-editor td, .rich-editor th {
+            border: 1px solid #94a3b8;
+            min-width: 80px;
+            padding: 8px;
+            vertical-align: top;
+        }
+        .table-wrapper {
+            position: relative;
+            margin: 12px 0;
+        }
+        .table-options-btn {
+            position: absolute;
+            top: -12px;
+            right: -8px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+            z-index: 4;
+        }
+        .floating-menu {
+            position: fixed;
+            min-width: 190px;
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+            padding: 6px;
+            z-index: 100;
+            display: none;
+        }
+        .floating-menu button {
+            width: 100%;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 0.8rem;
+            color: #1e293b;
+            cursor: pointer;
+        }
+        .floating-menu button:hover { background: #f1f5f9; }
 
         .status-bar {
             background: #f8fafc;
@@ -292,6 +380,7 @@
                 <select id="templateSelect" class="tool-select" title="Load Template">
                     <option value="">Templates</option>
                     <option value="question-paper">Question Paper</option>
+                    <option value="question-paper-toc">Question Paper TOC</option>
                     <option value="answer-key">Answer Key</option>
                     <option value="worksheet">Worksheet</option>
                     <option value="lesson-plan">Lesson Plan</option>
@@ -328,6 +417,10 @@
                 <button class="tool-btn" id="insertLocalImageBtn" title="Upload Local Image"><i class="fas fa-file-image"></i></button>
                 <input type="file" id="localImageInput" accept="image/*" style="display:none">
             </div>
+            <!-- Tables -->
+            <div class="tool-group">
+                <button class="tool-btn" id="insertTableBtn" title="Insert Table"><i class="fas fa-table"></i></button>
+            </div>
             <div class="separator"></div>
             <button class="tool-btn export-btn" id="exportDocxBtn" style="background:#1e293b; color:white; padding:0 16px;"><i class="fas fa-file-word"></i> Export DOCX</button>
         </div>
@@ -352,6 +445,8 @@
         </div>
     </div>
 </div>
+<div class="floating-menu" id="selectionMenu"></div>
+<div class="floating-menu" id="tableMenu"></div>
 
 <script type="module">
     import * as docx from 'docx';
@@ -360,6 +455,10 @@
     const tocContainer = document.getElementById('tocContainer');
     const headingSelect = document.getElementById('headingSelect');
     const templateSelect = document.getElementById('templateSelect');
+    const selectionMenu = document.getElementById('selectionMenu');
+    const tableMenu = document.getElementById('tableMenu');
+    let savedSelectionRange = null;
+    let longPressTimer = null;
 
     const documentTemplates = {
         'question-paper': {
@@ -389,6 +488,33 @@
                 <ol>
                     <li>Question 1. [10 marks]</li>
                 </ol>
+            `
+        },
+        'question-paper-toc': {
+            label: 'Question Paper TOC',
+            html: `
+                <h1>Subject1</h1>
+                <h2>Question1</h2>
+                <h3>optionA</h3>
+                <h3>optionB</h3>
+                <h3>optionC</h3>
+                <h3>optionD</h3>
+                <h2>Question2</h2>
+                <h3>optionA</h3>
+                <h3>optionB</h3>
+                <h3>optionC</h3>
+                <h3>optionD</h3>
+                <h1>Subject2</h1>
+                <h2>Question1</h2>
+                <h3>optionA</h3>
+                <h3>optionB</h3>
+                <h3>optionC</h3>
+                <h3>optionD</h3>
+                <h2>Question2</h2>
+                <h3>optionA</h3>
+                <h3>optionB</h3>
+                <h3>optionC</h3>
+                <h3>optionD</h3>
             `
         },
         'answer-key': {
@@ -515,6 +641,29 @@
     });
     
     // ---------- BUILD COLLAPSIBLE TREE STRUCTURE ----------
+    function serializeImages(images) {
+        return images.map((img, imageIndex) => {
+            const src = img.getAttribute('src') || '';
+            return {
+                index: imageIndex,
+                alt: img.getAttribute('alt') || '',
+                src,
+            };
+        });
+    }
+
+    function getHeadingImages(heading) {
+        const images = [...heading.querySelectorAll('img')];
+        let node = heading.nextElementSibling;
+
+        while (node && !/^H[1-4]$/.test(node.tagName)) {
+            images.push(...node.querySelectorAll('img'));
+            node = node.nextElementSibling;
+        }
+
+        return serializeImages(images);
+    }
+
     function buildTOCNodes() {
         const headings = editor.querySelectorAll('h1, h2, h3, h4');
         const nodes = [];
@@ -531,7 +680,7 @@
             const text = heading.innerText.trim() || `Heading ${idx+1}`;
             if (!heading.id) heading.id = `heading-${Date.now()}-${idx}-${Math.random()}`;
             
-            const node = { id: heading.id, text, level, children: [] };
+            const node = { id: heading.id, text, level, images: getHeadingImages(heading), children: [] };
             
             while (stack.length > 1 && stack[stack.length-1].level >= level) stack.pop();
             const parent = stack[stack.length-1];
@@ -594,6 +743,25 @@
             itemDiv.appendChild(toggleSpan);
             itemDiv.appendChild(titleSpan);
             wrapper.appendChild(itemDiv);
+
+            if (node.images.length) {
+                node.images.forEach((image) => {
+                    if (!image.src) return;
+                    const srcSpan = document.createElement('span');
+                    srcSpan.className = 'toc-image-src';
+                    srcSpan.innerText = image.src;
+                    srcSpan.title = image.src;
+                    srcSpan.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const targetElem = document.getElementById(node.id);
+                        if (targetElem) {
+                            targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            editor.focus();
+                        }
+                    });
+                    wrapper.appendChild(srcSpan);
+                });
+            }
             
             // Children container
             if (hasChildren) {
@@ -647,7 +815,11 @@
     document.getElementById('exportTocJsonBtn').addEventListener('click', exportTOCAsJSON);
     
     // Observer to re-render TOC on editor changes
-    const observer = new MutationObserver(() => { renderTOC(); });
+    const observer = new MutationObserver(() => {
+        enhanceImages();
+        enhanceTables();
+        renderTOC();
+    });
     observer.observe(editor, { childList: true, subtree: true, characterData: true, attributes: true });
     
     // Listen to selection changes to update heading dropdown
@@ -692,6 +864,10 @@
         execCmd('fontSize', e.target.value);
     });
     document.getElementById('clearFormatBtn').addEventListener('click', () => execCmd('removeFormat'));
+    document.getElementById('insertTableBtn').addEventListener('click', () => {
+        insertTableAtCursor(createTableWrapper(['', '', '', '', '', '', '', '', ''], 3));
+        updateStatus("Table inserted", false);
+    });
     
     // Image Upload & Clipboard
     const localImageInput = document.getElementById('localImageInput');
@@ -708,17 +884,22 @@
     
     function insertImageAtCursor(src) {
         const img = document.createElement('img');
-        img.src = src;
         img.style.maxWidth = "100%";
         img.style.borderRadius = "12px";
         img.style.margin = "8px 0";
+        img.addEventListener('load', () => {
+            if (!img.style.width) img.style.width = `${Math.min(img.naturalWidth || 400, 400)}px`;
+            syncImageSizeData(img);
+        }, { once: true });
+        img.src = src;
+        const imageNode = createImageResizer(img);
         const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) { editor.appendChild(img); editor.focus(); return; }
+        if (!selection || selection.rangeCount === 0) { editor.appendChild(imageNode); editor.focus(); return; }
         const range = selection.getRangeAt(0);
         range.deleteContents();
-        range.insertNode(img);
-        range.setStartAfter(img);
-        range.setEndAfter(img);
+        range.insertNode(imageNode);
+        range.setStartAfter(imageNode);
+        range.setEndAfter(imageNode);
         selection.removeAllRanges();
         selection.addRange(range);
         editor.focus();
@@ -749,6 +930,244 @@
         sb.innerHTML = `<i class="fas ${isErr ? 'fa-exclamation-triangle' : 'fa-check'}"></i> ${msg}`;
         setTimeout(() => { if (sb.innerHTML.includes(msg)) sb.innerHTML = '<i class="fas fa-check-circle"></i> Ready'; }, 2000);
     }
+
+    function hideMenus() {
+        selectionMenu.style.display = 'none';
+        tableMenu.style.display = 'none';
+    }
+
+    function showMenu(menu, x, y, buttons) {
+        menu.innerHTML = '';
+        buttons.forEach(({ label, action }) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = label;
+            btn.addEventListener('click', () => {
+                hideMenus();
+                action();
+            });
+            menu.appendChild(btn);
+        });
+        menu.style.left = `${Math.min(x, window.innerWidth - 220)}px`;
+        menu.style.top = `${Math.min(y, window.innerHeight - 160)}px`;
+        menu.style.display = 'block';
+    }
+
+    function syncImageSizeData(img) {
+        const width = Math.round(img.getBoundingClientRect().width || parseFloat(img.style.width) || img.naturalWidth || 400);
+        const height = Math.round(img.getBoundingClientRect().height || img.naturalHeight || 300);
+        img.dataset.docxWidth = width;
+        img.dataset.docxHeight = height;
+    }
+
+    function createImageResizer(img) {
+        if (img.closest('.image-resizer')) return img.closest('.image-resizer');
+        img.dataset.imageEnhanced = 'true';
+        const wrapper = document.createElement('span');
+        wrapper.className = 'image-resizer';
+        wrapper.contentEditable = 'false';
+        const handle = document.createElement('span');
+        handle.className = 'image-resize-handle';
+        handle.title = 'Resize image';
+        wrapper.appendChild(img);
+        wrapper.appendChild(handle);
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const startX = e.clientX;
+            const startWidth = img.getBoundingClientRect().width || 300;
+            const ratio = (img.naturalHeight && img.naturalWidth) ? img.naturalHeight / img.naturalWidth : null;
+
+            function onMove(moveEvent) {
+                const nextWidth = Math.max(80, Math.min(editor.clientWidth - 40, startWidth + moveEvent.clientX - startX));
+                img.style.width = `${Math.round(nextWidth)}px`;
+                img.style.height = ratio ? `${Math.round(nextWidth * ratio)}px` : 'auto';
+                syncImageSizeData(img);
+            }
+
+            function onUp() {
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                renderTOC();
+            }
+
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+        });
+
+        syncImageSizeData(img);
+        return wrapper;
+    }
+
+    function enhanceImages(root = editor) {
+        root.querySelectorAll('img:not([data-image-enhanced])').forEach((img) => {
+            const parent = img.parentNode;
+            const nextSibling = img.nextSibling;
+            const wrapper = createImageResizer(img);
+            if (!wrapper.parentNode && parent) parent.insertBefore(wrapper, nextSibling);
+        });
+        root.querySelectorAll('.image-resizer img').forEach(syncImageSizeData);
+    }
+
+    function splitSelectedText(text) {
+        return text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    }
+
+    function makeCell(content) {
+        const td = document.createElement('td');
+        td.innerHTML = content || '<br>';
+        return td;
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
+    function createTableWrapper(cells, columns) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'table-wrapper';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'table-options-btn';
+        button.contentEditable = 'false';
+        button.title = 'Table options';
+        button.innerHTML = '<i class="fas fa-ellipsis-h"></i>';
+        const table = document.createElement('table');
+        const safeColumns = Math.max(1, columns);
+        for (let i = 0; i < cells.length; i += safeColumns) {
+            const tr = document.createElement('tr');
+            cells.slice(i, i + safeColumns).forEach(cell => tr.appendChild(makeCell(cell)));
+            while (tr.children.length < safeColumns) tr.appendChild(makeCell(''));
+            table.appendChild(tr);
+        }
+        wrapper.appendChild(button);
+        wrapper.appendChild(table);
+        attachTableButton(button, table);
+        return wrapper;
+    }
+
+    function insertTableAtCursor(wrapper) {
+        const selection = window.getSelection();
+        const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+        if (range && editor.contains(range.commonAncestorContainer)) {
+            range.deleteContents();
+            range.insertNode(wrapper);
+            range.setStartAfter(wrapper);
+            range.setEndAfter(wrapper);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        } else {
+            editor.appendChild(wrapper);
+        }
+        editor.focus();
+        renderTOC();
+    }
+
+    function getTableCells(table) {
+        return Array.from(table.querySelectorAll('td, th')).map(cell => cell.innerHTML.trim() || '<br>');
+    }
+
+    function replaceTable(table, columns) {
+        const cells = getTableCells(table);
+        const wrapper = table.closest('.table-wrapper');
+        const next = createTableWrapper(cells, columns);
+        if (wrapper) wrapper.replaceWith(next);
+        else table.replaceWith(next);
+        renderTOC();
+        updateStatus("Table updated", false);
+    }
+
+    function attachTableButton(button, table) {
+        if (button.dataset.tableEnhanced) return;
+        button.dataset.tableEnhanced = 'true';
+        button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const cellCount = table.querySelectorAll('td, th').length;
+            const buttons = [
+                { label: 'Convert to single column', action: () => replaceTable(table, 1) },
+                { label: 'Convert to single row', action: () => replaceTable(table, cellCount) },
+            ];
+            if (cellCount % 2 === 0) buttons.push({ label: `Convert to ${cellCount / 2} columns`, action: () => replaceTable(table, cellCount / 2) });
+            showMenu(tableMenu, e.clientX, e.clientY, buttons);
+        });
+    }
+
+    function enhanceTables(root = editor) {
+        root.querySelectorAll('table').forEach((table) => {
+            if (table.closest('.table-wrapper')) return;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'table-wrapper';
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'table-options-btn';
+            button.contentEditable = 'false';
+            button.title = 'Table options';
+            button.innerHTML = '<i class="fas fa-ellipsis-h"></i>';
+            table.parentNode.insertBefore(wrapper, table);
+            wrapper.appendChild(button);
+            wrapper.appendChild(table);
+            attachTableButton(button, table);
+        });
+        root.querySelectorAll('.table-options-btn').forEach((button) => {
+            const table = button.closest('.table-wrapper')?.querySelector('table');
+            if (table) attachTableButton(button, table);
+        });
+    }
+
+    function restoreSavedSelection() {
+        if (!savedSelectionRange) return null;
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(savedSelectionRange);
+        return savedSelectionRange;
+    }
+
+    function convertSelectionToTable(columns) {
+        const range = restoreSavedSelection();
+        if (!range) return;
+        const lines = splitSelectedText(range.toString());
+        if (!lines.length) return;
+        const wrapper = createTableWrapper(lines.map(escapeHtml), columns);
+        range.deleteContents();
+        range.insertNode(wrapper);
+        savedSelectionRange = null;
+        editor.focus();
+        renderTOC();
+        updateStatus("Text converted to table", false);
+    }
+
+    function showSelectionTableMenu(x, y) {
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount || selection.isCollapsed || !editor.contains(selection.anchorNode)) return;
+        const lines = splitSelectedText(selection.toString());
+        if (!lines.length) return;
+        savedSelectionRange = selection.getRangeAt(0).cloneRange();
+        const buttons = [{ label: `Convert to table (${lines.length} columns)`, action: () => convertSelectionToTable(lines.length) }];
+        if (lines.length % 2 === 0) buttons.push({ label: `Convert to table (${lines.length / 2} columns)`, action: () => convertSelectionToTable(lines.length / 2) });
+        showMenu(selectionMenu, x, y, buttons);
+    }
+
+    editor.addEventListener('contextmenu', (e) => {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && editor.contains(selection.anchorNode)) {
+            e.preventDefault();
+            showSelectionTableMenu(e.clientX, e.clientY);
+        }
+    });
+
+    editor.addEventListener('touchstart', (e) => {
+        clearTimeout(longPressTimer);
+        longPressTimer = setTimeout(() => {
+            const touch = e.touches[0];
+            if (touch) showSelectionTableMenu(touch.clientX, touch.clientY);
+        }, 650);
+    });
+    ['touchend', 'touchmove', 'touchcancel'].forEach(eventName => editor.addEventListener(eventName, () => clearTimeout(longPressTimer)));
+    document.addEventListener('click', (e) => {
+        if (!selectionMenu.contains(e.target) && !tableMenu.contains(e.target) && !e.target.closest('.table-options-btn')) hideMenus();
+    });
     
     // Keyboard shortcuts
     editor.addEventListener('keydown', (e) => {
@@ -778,7 +1197,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Generating...';
         btn.disabled = true;
         try {
-            const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType, HeadingLevel } = docx;
+            const { Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell, AlignmentType, UnderlineType, HeadingLevel, WidthType } = docx;
             function getAlignment(el) {
                 const ta = window.getComputedStyle(el).textAlign;
                 if (ta === 'center') return AlignmentType.CENTER;
@@ -801,6 +1220,14 @@
                 for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
                 return arr;
             }
+            function getImageTransformation(img) {
+                syncImageSizeData(img);
+                const rawWidth = Number(img.dataset.docxWidth) || img.naturalWidth || 400;
+                const rawHeight = Number(img.dataset.docxHeight) || img.naturalHeight || 300;
+                const width = Math.round(Math.min(rawWidth, 600));
+                const height = Math.round(rawHeight * (width / rawWidth));
+                return { width, height };
+            }
             async function processInlineChildren(node) {
                 let runs = [];
                 for (let child of node.childNodes) {
@@ -809,7 +1236,10 @@
                         runs.push(...await processInlineChildren(child));
                         continue;
                     }
-                    runs.push(...await processNode(child, getAlignment(node)));
+                    const childItems = await processNode(child, getAlignment(node));
+                    childItems.forEach(item => {
+                        if (item instanceof TextRun || item instanceof ImageRun) runs.push(item);
+                    });
                 }
                 return runs.length ? runs : [new TextRun("")];
             }
@@ -838,6 +1268,30 @@
                 return paragraphs;
             }
 
+            async function processTable(tableNode) {
+                const rows = [];
+                for (let row of tableNode.rows) {
+                    const cells = [];
+                    for (let cell of row.cells) {
+                        let children = [];
+                        for (let child of cell.childNodes) {
+                            const items = await processNode(child, getAlignment(cell));
+                            items.forEach(item => {
+                                if (item instanceof Paragraph) children.push(item);
+                                else if (item instanceof TextRun || item instanceof ImageRun) children.push(new Paragraph({ children: [item] }));
+                            });
+                        }
+                        if (!children.length) children = [new Paragraph({ children: [new TextRun(cell.innerText.trim() || "")] })];
+                        cells.push(new TableCell({ children }));
+                    }
+                    rows.push(new TableRow({ children: cells }));
+                }
+                return [new Table({
+                    rows,
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                })];
+            }
+
             async function processNode(node, align = AlignmentType.LEFT) {
                 if (node.nodeType === Node.TEXT_NODE) {
                     const text = node.textContent;
@@ -846,18 +1300,21 @@
                 }
                 if (node.nodeType === Node.ELEMENT_NODE) {
                     const tag = node.tagName.toLowerCase();
+                    if (tag === 'button') return [];
+                    if (tag === 'table') return processTable(node);
                     if (tag === 'img') {
                         try {
                             let data; 
                             if (node.src.startsWith('data:')) data = base64ToUint8(node.src);
                             else { const res = await fetch(node.src); const blob = await res.blob(); data = new Uint8Array(await blob.arrayBuffer()); }
-                            return [new ImageRun({ data, transformation: { width: 400, height: 300 } })];
+                            return [new ImageRun({ data, transformation: getImageTransformation(node) })];
                         } catch(e) { return [new TextRun("[Image]")]; }
                     }
                     if (tag === 'br') return [new TextRun({ text: "\n", break: 1 })];
                     if (tag === 'ul' || tag === 'ol') return processList(node);
                     let childRuns = [];
                     for (let child of node.childNodes) childRuns.push(...await processNode(child, getAlignment(node)));
+                    if (childRuns.some(item => item instanceof Table)) return childRuns;
                     const block = ['p','div','h1','h2','h3','h4','li'];
                     if (block.includes(tag)) {
                         let heading = null;
@@ -876,7 +1333,7 @@
             let allParas = [];
             for (let child of editor.childNodes) {
                 const res = await processNode(child);
-                for (let item of res) if (item instanceof Paragraph) allParas.push(item);
+                for (let item of res) if (item instanceof Paragraph || item instanceof Table) allParas.push(item);
                 else if (item instanceof TextRun) allParas.push(new Paragraph({ children: [item] }));
             }
             if (!allParas.length) allParas.push(new Paragraph({ children: [new TextRun("Empty")] }));
@@ -888,6 +1345,8 @@
         finally { btn.innerHTML = orig; btn.disabled = false; }
     });
     
+    enhanceImages();
+    enhanceTables();
     renderTOC();
     updateActiveStates();
 </script>
