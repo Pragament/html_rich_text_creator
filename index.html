@@ -3,12 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rich Text WordPad - Image Clipboard & DOCX Export</title>
-    <!-- Include FileSaver.js for easy blob saving -->
+    <title>Rich WordPad - Clipboard Images & DOCX Export (v9.7.1)</title>
+    <!-- FileSaver.js for blob saving -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <!-- Include docx library for professional DOCX generation with images -->
-    <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
-    <!-- Font Awesome 6 (free icons) -->
+    <!-- Use the exact working docx 9.7.1 ES module from jsDelivr with proper CORS -->
+    <script type="importmap">
+        {
+            "imports": {
+                "docx": "https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.mjs"
+            }
+        }
+    </script>
+    <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         * {
@@ -26,7 +32,6 @@
             padding: 20px;
         }
 
-        /* wordpad app container */
         .wordpad-container {
             width: 1300px;
             max-width: 98vw;
@@ -36,7 +41,6 @@
             overflow: hidden;
         }
 
-        /* toolbar styling */
         .toolbar {
             background: rgba(248, 250, 252, 0.98);
             border-bottom: 1px solid #dce3ec;
@@ -100,7 +104,6 @@
             margin: 0 8px;
         }
 
-        /* editor area */
         .editor-wrapper {
             padding: 20px 25px 25px 25px;
             background: #fefefe;
@@ -223,561 +226,345 @@
     <!-- Rich Text Editor -->
     <div class="editor-wrapper">
         <div id="richEditor" class="rich-editor" contenteditable="true">
-            <p><strong>✨ Rich WordPad</strong> — you can write, style text, and insert images from clipboard or local.</p>
-            <p>👉 Try copying an image (Ctrl+C) from anywhere, then click <i class="fas fa-image"></i> <strong>📋 Paste Image from Clipboard</strong> button.</p>
-            <p>Images will be embedded in the document and exported to DOCX perfectly.</p>
+            <p><strong>✨ Rich WordPad</strong> — write, style text, and insert images from clipboard or local.</p>
+            <p>👉 Copy an image (Ctrl+C) from anywhere, then click <i class="fas fa-image"></i> <strong>📋 Paste Image from Clipboard</strong>.</p>
+            <p>Images will be embedded and exported to DOCX with full quality.</p>
             <p style="margin-top:12px">Happy editing!</p>
         </div>
     </div>
 
     <div class="status-bar">
-        <span><i class="fas fa-info-circle"></i> Tip: Use "Paste from Clipboard" for images</span>
+        <span><i class="fas fa-info-circle"></i> Tip: Use toolbar buttons or keyboard shortcuts</span>
         <span class="clipboard-info" id="clipboardStatus">📋 Ready</span>
     </div>
 </div>
 
-<script>
-    (function() {
-        const editor = document.getElementById('richEditor');
+<script type="module">
+    // Import docx library from the working CDN (version 9.7.1)
+    import * as docx from 'docx';
+    
+    // Wait for DOM to be fully ready
+    const editor = document.getElementById('richEditor');
+    
+    // Helper: exec command
+    function execCmd(command, value = null) {
+        document.execCommand(command, false, value);
+        editor.focus();
+    }
+    
+    // Update active button states
+    function updateActiveStates() {
+        document.getElementById('boldBtn').classList.toggle('active', document.queryCommandState('bold'));
+        document.getElementById('italicBtn').classList.toggle('active', document.queryCommandState('italic'));
+        document.getElementById('underlineBtn').classList.toggle('active', document.queryCommandState('underline'));
+    }
+    
+    editor.addEventListener('keyup', updateActiveStates);
+    editor.addEventListener('mouseup', updateActiveStates);
+    editor.addEventListener('selectionchange', updateActiveStates);
+    
+    // Toolbar listeners
+    document.getElementById('boldBtn').addEventListener('click', () => execCmd('bold'));
+    document.getElementById('italicBtn').addEventListener('click', () => execCmd('italic'));
+    document.getElementById('underlineBtn').addEventListener('click', () => execCmd('underline'));
+    document.getElementById('alignLeftBtn').addEventListener('click', () => execCmd('justifyLeft'));
+    document.getElementById('alignCenterBtn').addEventListener('click', () => execCmd('justifyCenter'));
+    document.getElementById('alignRightBtn').addEventListener('click', () => execCmd('justifyRight'));
+    document.getElementById('alignJustifyBtn').addEventListener('click', () => execCmd('justifyFull'));
+    
+    const fontFamilySelect = document.getElementById('fontFamilySelect');
+    const fontSizeSelect = document.getElementById('fontSizeSelect');
+    
+    fontFamilySelect.addEventListener('change', (e) => execCmd('fontName', e.target.value));
+    fontSizeSelect.addEventListener('change', (e) => {
+        document.execCommand('styleWithCSS', false, true);
+        execCmd('fontSize', e.target.value);
+    });
+    
+    document.getElementById('clearFormatBtn').addEventListener('click', () => execCmd('removeFormat'));
+    
+    // Local image upload
+    const localImageInput = document.getElementById('localImageInput');
+    document.getElementById('insertLocalImageBtn').addEventListener('click', () => localImageInput.click());
+    
+    localImageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (ev) => insertImageAtCursor(ev.target.result);
+            reader.readAsDataURL(file);
+        }
+        localImageInput.value = '';
+    });
+    
+    function insertImageAtCursor(src, altText = "Image") {
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = altText;
+        img.style.maxWidth = "100%";
+        img.style.borderRadius = "8px";
+        img.style.margin = "6px 0";
         
-        function execCmd(command, value = null) {
-            document.execCommand(command, false, value);
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+            editor.appendChild(img);
             editor.focus();
+            return;
         }
-
-        function updateActiveStates() {
-            document.getElementById('boldBtn').classList.toggle('active', document.queryCommandState('bold'));
-            document.getElementById('italicBtn').classList.toggle('active', document.queryCommandState('italic'));
-            document.getElementById('underlineBtn').classList.toggle('active', document.queryCommandState('underline'));
-        }
-
-        editor.addEventListener('keyup', updateActiveStates);
-        editor.addEventListener('mouseup', updateActiveStates);
-        editor.addEventListener('selectionchange', updateActiveStates);
-
-        // Toolbar listeners
-        document.getElementById('boldBtn').addEventListener('click', () => execCmd('bold'));
-        document.getElementById('italicBtn').addEventListener('click', () => execCmd('italic'));
-        document.getElementById('underlineBtn').addEventListener('click', () => execCmd('underline'));
-        document.getElementById('alignLeftBtn').addEventListener('click', () => execCmd('justifyLeft'));
-        document.getElementById('alignCenterBtn').addEventListener('click', () => execCmd('justifyCenter'));
-        document.getElementById('alignRightBtn').addEventListener('click', () => execCmd('justifyRight'));
-        document.getElementById('alignJustifyBtn').addEventListener('click', () => execCmd('justifyFull'));
-        
-        const fontFamilySelect = document.getElementById('fontFamilySelect');
-        const fontSizeSelect = document.getElementById('fontSizeSelect');
-        
-        fontFamilySelect.addEventListener('change', (e) => execCmd('fontName', e.target.value));
-        fontSizeSelect.addEventListener('change', (e) => {
-            document.execCommand('styleWithCSS', false, true);
-            execCmd('fontSize', e.target.value);
-        });
-        
-        document.getElementById('clearFormatBtn').addEventListener('click', () => execCmd('removeFormat'));
-        
-        // Local image upload
-        const localImageInput = document.getElementById('localImageInput');
-        document.getElementById('insertLocalImageBtn').addEventListener('click', () => localImageInput.click());
-        
-        localImageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (ev) => insertImageAtCursor(ev.target.result);
-                reader.readAsDataURL(file);
-            }
-            localImageInput.value = '';
-        });
-        
-        function insertImageAtCursor(src, altText = "Image") {
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = altText;
-            img.style.maxWidth = "100%";
-            img.style.borderRadius = "8px";
-            img.style.margin = "6px 0";
-            
-            const selection = window.getSelection();
-            if (!selection || selection.rangeCount === 0) {
-                editor.appendChild(img);
-                editor.focus();
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(img);
+        range.setStartAfter(img);
+        range.setEndAfter(img);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        editor.focus();
+    }
+    
+    // Insert image from clipboard
+    async function pasteImageFromClipboard() {
+        try {
+            if (!navigator.clipboard || !navigator.clipboard.read) {
+                updateClipboardStatus("❌ Clipboard read not supported", true);
                 return;
             }
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            range.insertNode(img);
-            range.setStartAfter(img);
-            range.setEndAfter(img);
-            selection.removeAllRanges();
-            selection.addRange(range);
-            editor.focus();
-        }
-        
-        // Insert image from clipboard
-        async function pasteImageFromClipboard() {
-            try {
-                if (!navigator.clipboard || !navigator.clipboard.read) {
-                    updateClipboardStatus("❌ Clipboard read not supported", true);
+            const clipboardItems = await navigator.clipboard.read();
+            for (const item of clipboardItems) {
+                const imageTypes = item.types.filter(type => type.startsWith('image/'));
+                if (imageTypes.length > 0) {
+                    const blob = await item.getType(imageTypes[0]);
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        insertImageAtCursor(e.target.result, "Clipboard Image");
+                        updateClipboardStatus("✅ Image inserted!", false);
+                        setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
+                    };
+                    reader.readAsDataURL(blob);
                     return;
                 }
-                const clipboardItems = await navigator.clipboard.read();
-                for (const item of clipboardItems) {
-                    const imageTypes = item.types.filter(type => type.startsWith('image/'));
-                    if (imageTypes.length > 0) {
-                        const blob = await item.getType(imageTypes[0]);
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            insertImageAtCursor(e.target.result, "Clipboard Image");
-                            updateClipboardStatus("✅ Image inserted!", false);
-                            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-                        };
-                        reader.readAsDataURL(blob);
-                        return;
-                    }
-                }
-                updateClipboardStatus("⚠️ No image found", true);
-                setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-            } catch (err) {
-                updateClipboardStatus("❌ Access denied", true);
-                setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
             }
+            updateClipboardStatus("⚠️ No image found in clipboard", true);
+            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
+        } catch (err) {
+            console.error("Clipboard error:", err);
+            updateClipboardStatus("❌ Access denied or error", true);
+            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
         }
+    }
+    
+    function updateClipboardStatus(msg, isError) {
+        const statusDiv = document.getElementById('clipboardStatus');
+        statusDiv.innerHTML = `<i class="fas ${isError ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i> ${msg}`;
+        statusDiv.style.background = isError ? "#fee2e2" : "#e6f7e6";
+        setTimeout(() => {
+            if (statusDiv.innerHTML.includes(msg)) {
+                statusDiv.style.background = "#eef2ff";
+                statusDiv.innerHTML = "📋 Ready";
+            }
+        }, 2000);
+    }
+    
+    document.getElementById('insertImageClipboardBtn').addEventListener('click', pasteImageFromClipboard);
+    
+    // Keyboard shortcuts
+    editor.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'b') { e.preventDefault(); execCmd('bold'); }
+            else if (e.key === 'i') { e.preventDefault(); execCmd('italic'); }
+            else if (e.key === 'u') { e.preventDefault(); execCmd('underline'); }
+        }
+    });
+    
+    // EXPORT TO DOCX using docx 9.7.1
+    document.getElementById('exportDocxBtn').addEventListener('click', async () => {
+        const exportBtn = document.getElementById('exportDocxBtn');
+        const originalText = exportBtn.innerHTML;
         
-        function updateClipboardStatus(msg, isError) {
-            const statusDiv = document.getElementById('clipboardStatus');
-            statusDiv.innerHTML = `<i class="fas ${isError ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i> ${msg}`;
-            statusDiv.style.background = isError ? "#fee2e2" : "#e6f7e6";
-            setTimeout(() => {
-                if (statusDiv.innerHTML.includes(msg)) {
-                    statusDiv.style.background = "#eef2ff";
-                    statusDiv.innerHTML = "📋 Ready";
-                }
-            }, 2000);
-        }
-        
-        document.getElementById('insertImageClipboardBtn').addEventListener('click', pasteImageFromClipboard);
-        
-        // Keyboard shortcuts
-        editor.addEventListener('keydown', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                if (e.key === 'b') { e.preventDefault(); execCmd('bold'); }
-                else if (e.key === 'i') { e.preventDefault(); execCmd('italic'); }
-                else if (e.key === 'u') { e.preventDefault(); execCmd('underline'); }
+        try {
+            exportBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Generating...';
+            exportBtn.disabled = true;
+            
+            // Check if docx library loaded properly
+            if (!docx || typeof docx.Document === 'undefined') {
+                throw new Error('DOCX library not loaded properly. Please refresh the page.');
             }
-        });
-        
-        const DOCX_SCRIPT_URLS = [
-            'https://unpkg.com/docx@8.5.0/build/index.js',
-            'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js'
-        ];
-        let docxLoadPromise = null;
-
-        function isDocxReady() {
-            return Boolean(window.docx && window.docx.Document && window.docx.Packer);
-        }
-
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = src;
-                script.async = true;
-                script.onload = resolve;
-                script.onerror = () => reject(new Error(`Failed to load ${src}`));
-                document.head.appendChild(script);
-            });
-        }
-
-        async function ensureDocxLoaded() {
-            if (isDocxReady()) return window.docx;
-            if (docxLoadPromise) return docxLoadPromise;
-
-            docxLoadPromise = (async () => {
-                updateClipboardStatus("Loading DOCX exporter...", false);
-                for (const src of DOCX_SCRIPT_URLS) {
-                    try {
-                        await loadScript(src);
-                        if (isDocxReady()) return window.docx;
-                    } catch (err) {
-                        console.warn('DOCX library load failed:', err);
-                    }
-                }
-                return null;
-            })();
-
-            try {
-                return await docxLoadPromise;
-            } catch (err) {
-                docxLoadPromise = null;
-                throw err;
-            }
-        }
-
-        function escapeXml(value) {
-            return value
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-        }
-
-        function dosDateTime(date) {
-            let dosTime = date.getSeconds() >> 1;
-            dosTime |= date.getMinutes() << 5;
-            dosTime |= date.getHours() << 11;
-            let dosDate = date.getDate();
-            dosDate |= (date.getMonth() + 1) << 5;
-            dosDate |= (date.getFullYear() - 1980) << 9;
-            return { dosDate, dosTime };
-        }
-
-        function crc32(bytes) {
-            let crc = -1;
-            for (let i = 0; i < bytes.length; i++) {
-                crc ^= bytes[i];
-                for (let j = 0; j < 8; j++) {
-                    crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-                }
-            }
-            return (crc ^ -1) >>> 0;
-        }
-
-        function createZip(files) {
-            const encoder = new TextEncoder();
-            const fileRecords = [];
-            const chunks = [];
-            let offset = 0;
-            const now = dosDateTime(new Date());
-
-            function uint16(value) {
-                return [value & 255, (value >>> 8) & 255];
-            }
-
-            function uint32(value) {
-                return [value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255];
-            }
-
-            for (const file of files) {
-                const nameBytes = encoder.encode(file.name);
-                const data = typeof file.data === 'string' ? encoder.encode(file.data) : new Uint8Array(file.data);
-                const checksum = crc32(data);
-                const localHeader = new Uint8Array([
-                    ...uint32(0x04034b50), ...uint16(20), ...uint16(0), ...uint16(0),
-                    ...uint16(now.dosTime), ...uint16(now.dosDate), ...uint32(checksum),
-                    ...uint32(data.length), ...uint32(data.length), ...uint16(nameBytes.length), ...uint16(0)
-                ]);
-                chunks.push(localHeader, nameBytes, data);
-                fileRecords.push({ nameBytes, data, checksum, offset });
-                offset += localHeader.length + nameBytes.length + data.length;
-            }
-
-            const centralDirectoryOffset = offset;
-            for (const file of fileRecords) {
-                const centralHeader = new Uint8Array([
-                    ...uint32(0x02014b50), ...uint16(20), ...uint16(20), ...uint16(0), ...uint16(0),
-                    ...uint16(now.dosTime), ...uint16(now.dosDate), ...uint32(file.checksum),
-                    ...uint32(file.data.length), ...uint32(file.data.length), ...uint16(file.nameBytes.length),
-                    ...uint16(0), ...uint16(0), ...uint16(0), ...uint16(0), ...uint32(0), ...uint32(file.offset)
-                ]);
-                chunks.push(centralHeader, file.nameBytes);
-                offset += centralHeader.length + file.nameBytes.length;
-            }
-
-            const centralDirectorySize = offset - centralDirectoryOffset;
-            chunks.push(new Uint8Array([
-                ...uint32(0x06054b50), ...uint16(0), ...uint16(0), ...uint16(fileRecords.length),
-                ...uint16(fileRecords.length), ...uint32(centralDirectorySize),
-                ...uint32(centralDirectoryOffset), ...uint16(0)
-            ]));
-
-            return new Blob(chunks, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-        }
-
-        function paragraphXml(children, alignment = 'left') {
-            const alignValue = alignment === 'justify' ? 'both' : alignment;
-            return `<w:p><w:pPr><w:jc w:val="${alignValue}"/></w:pPr>${children}</w:p>`;
-        }
-
-        function textRunXml(text, styles = {}) {
-            const styleXml = [
-                styles.bold ? '<w:b/>' : '',
-                styles.italics ? '<w:i/>' : '',
-                styles.underline ? '<w:u w:val="single"/>' : ''
-            ].join('');
-            const space = /^\s|\s$/.test(text) ? ' xml:space="preserve"' : '';
-            return `<w:r>${styleXml ? `<w:rPr>${styleXml}</w:rPr>` : ''}<w:t${space}>${escapeXml(text)}</w:t></w:r>`;
-        }
-
-        async function imageParagraphXml(node, imageIndex, relationshipId, alignment) {
-            const src = node.src;
-            let bytes;
-            let mime = 'image/png';
-            if (src.startsWith('data:')) {
-                const [meta, base64Data] = src.split(',');
-                mime = (meta.match(/^data:([^;]+)/) || [])[1] || mime;
-                bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-            } else {
-                const response = await fetch(src);
-                const blob = await response.blob();
-                mime = blob.type || mime;
-                bytes = new Uint8Array(await blob.arrayBuffer());
-            }
-
-            const extension = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : mime.includes('gif') ? 'gif' : 'png';
-            const width = Math.min(node.naturalWidth || 400, 400);
-            const height = Math.round((node.naturalHeight || 300) * (width / (node.naturalWidth || 400)));
-            const cx = width * 9525;
-            const cy = height * 9525;
-            const name = `image${imageIndex}.${extension}`;
-            const xml = paragraphXml(
-                `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
-                `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${imageIndex}" name="${name}"/>` +
-                `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
-                `<pic:pic><pic:nvPicPr><pic:cNvPr id="${imageIndex}" name="${name}"/><pic:cNvPicPr/></pic:nvPicPr>` +
-                `<pic:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
-                `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
-                `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`,
-                alignment
-            );
-            return { xml, name, bytes };
-        }
-
-        async function buildFallbackDocxBlob(root) {
-            updateClipboardStatus("Using built-in DOCX exporter...", false);
-            const imageFiles = [];
-            const relationships = [];
-            const paragraphs = [];
-            let relationshipCounter = 1;
-            let imageCounter = 1;
-
+            
+            // Destructure needed components from docx
+            const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType } = docx;
+            
+            // Helper to get alignment from element
             function getAlignment(element) {
                 const textAlign = window.getComputedStyle(element).textAlign;
-                if (textAlign === 'center' || textAlign === 'right' || textAlign === 'justify') return textAlign;
-                return 'left';
+                if (textAlign === 'center') return AlignmentType.CENTER;
+                if (textAlign === 'right') return AlignmentType.RIGHT;
+                if (textAlign === 'justify') return AlignmentType.JUSTIFIED;
+                return AlignmentType.LEFT;
             }
-
-            function getStyles(element, inherited = {}) {
-                if (!element) return inherited;
-                const computed = window.getComputedStyle(element);
-                return {
-                    bold: inherited.bold || computed.fontWeight === '700' || computed.fontWeight === 'bold',
-                    italics: inherited.italics || computed.fontStyle === 'italic',
-                    underline: inherited.underline || computed.textDecoration.includes('underline')
-                };
-            }
-
-            function collectTextRuns(node, styles = {}) {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    return node.textContent ? textRunXml(node.textContent, styles) : '';
-                }
-                if (node.nodeType !== Node.ELEMENT_NODE || node.tagName.toLowerCase() === 'img') return '';
-                const nextStyles = getStyles(node, styles);
-                let xml = '';
-                for (const child of node.childNodes) xml += collectTextRuns(child, nextStyles);
-                return xml;
-            }
-
-            for (const node of root.childNodes) {
-                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
-                    paragraphs.push(paragraphXml(textRunXml(node.textContent), 'left'));
-                    continue;
-                }
-                if (node.nodeType !== Node.ELEMENT_NODE) continue;
-
-                const alignment = getAlignment(node);
-                if (node.tagName.toLowerCase() === 'img') {
-                    const relationshipId = `rId${relationshipCounter++}`;
-                    const image = await imageParagraphXml(node, imageCounter++, relationshipId, alignment);
-                    imageFiles.push(image);
-                    relationships.push(`<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${image.name}"/>`);
-                    paragraphs.push(image.xml);
-                    continue;
-                }
-
-                const textXml = collectTextRuns(node);
-                if (textXml) paragraphs.push(paragraphXml(textXml, alignment));
-
-                for (const imageNode of node.querySelectorAll('img')) {
-                    const relationshipId = `rId${relationshipCounter++}`;
-                    const image = await imageParagraphXml(imageNode, imageCounter++, relationshipId, alignment);
-                    imageFiles.push(image);
-                    relationships.push(`<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${image.name}"/>`);
-                    paragraphs.push(image.xml);
-                }
-            }
-
-            if (paragraphs.length === 0) paragraphs.push(paragraphXml(textRunXml('Empty document')));
-
-            const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
-            const packageRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
-            const documentRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationships.join('')}</Relationships>`;
-            const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${paragraphs.join('')}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
-            const coreXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>WordPad Export</dc:title><dc:creator>Rich Text WordPad</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`;
-            const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Rich Text WordPad</Application></Properties>`;
-
-            return createZip([
-                { name: '[Content_Types].xml', data: contentTypes },
-                { name: '_rels/.rels', data: packageRels },
-                { name: 'word/document.xml', data: documentXml },
-                { name: 'word/_rels/document.xml.rels', data: documentRels },
-                { name: 'docProps/core.xml', data: coreXml },
-                { name: 'docProps/app.xml', data: appXml },
-                ...imageFiles.map(image => ({ name: `word/media/${image.name}`, data: image.bytes }))
-            ]);
-        }
-
-        function saveBlob(blob, fileName) {
-            if (typeof window.saveAs === 'function') {
-                window.saveAs(blob, fileName);
-                return;
-            }
-
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
-        }
-
-        // EXPORT TO DOCX
-        document.getElementById('exportDocxBtn').addEventListener('click', async () => {
-            const exportBtn = document.getElementById('exportDocxBtn');
-            const originalText = exportBtn.innerHTML;
             
-            try {
-                exportBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Generating...';
-                exportBtn.disabled = true;
-                
-                const loadedDocx = await ensureDocxLoaded();
-                if (!loadedDocx) {
-                    const blob = await buildFallbackDocxBlob(editor);
-                    saveBlob(blob, `WordPad_${new Date().toISOString().slice(0,19)}.docx`);
-                    updateClipboardStatus("✅ DOCX exported successfully!", false);
-                    setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-                    return;
-                }
-
-                const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType } = loadedDocx;
-                
-                // Helper to get alignment
-                function getAlignment(element) {
-                    const textAlign = window.getComputedStyle(element).textAlign;
-                    if (textAlign === 'center') return AlignmentType.CENTER;
-                    if (textAlign === 'right') return AlignmentType.RIGHT;
-                    if (textAlign === 'justify') return AlignmentType.JUSTIFIED;
-                    return AlignmentType.LEFT;
-                }
-                
-                // Process nodes recursively
-                async function processNode(node, currentAlignment = AlignmentType.LEFT) {
-                    const paragraphs = [];
-                    
-                    if (node.nodeType === Node.TEXT_NODE) {
-                        const text = node.textContent;
-                        if (text.trim()) {
-                            const parent = node.parentElement;
-                            const runProps = {};
-                            if (parent) {
-                                const fontWeight = window.getComputedStyle(parent).fontWeight;
-                                const fontStyle = window.getComputedStyle(parent).fontStyle;
-                                const textDecoration = window.getComputedStyle(parent).textDecoration;
-                                if (fontWeight === '700' || fontWeight === 'bold') runProps.bold = true;
-                                if (fontStyle === 'italic') runProps.italics = true;
-                                if (textDecoration.includes('underline')) runProps.underline = { type: UnderlineType.SINGLE };
-                            }
-                            paragraphs.push(new Paragraph({
-                                children: [new TextRun({ text, ...runProps })],
-                                alignment: currentAlignment
-                            }));
-                        }
-                        return paragraphs;
-                    }
-                    
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        const tagName = node.tagName.toLowerCase();
-                        
-                        // Handle images
-                        if (tagName === 'img') {
-                            try {
-                                const src = node.src;
-                                if (src && (src.startsWith('data:') || src.startsWith('http'))) {
-                                    let imageData;
-                                    if (src.startsWith('data:')) {
-                                        const base64Data = src.split(',')[1];
-                                        imageData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-                                    } else {
-                                        const response = await fetch(src);
-                                        const blob = await response.blob();
-                                        imageData = await blob.arrayBuffer();
-                                    }
-                                    const imageRun = new ImageRun({
-                                        data: imageData,
-                                        transformation: { width: 400, height: 300 }
-                                    });
-                                    paragraphs.push(new Paragraph({ children: [imageRun], alignment: currentAlignment }));
-                                }
-                            } catch (err) {
-                                console.warn('Image processing error:', err);
-                            }
-                            return paragraphs;
-                        }
-                        
-                        // Process child nodes
-                        const childParas = [];
-                        const align = getAlignment(node);
-                        for (let child of node.childNodes) {
-                            const childResult = await processNode(child, align);
-                            childParas.push(...childResult);
-                        }
-                        
-                        // For block elements, return child paragraphs directly
-                        const blockTags = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'];
-                        if (blockTags.includes(tagName) && childParas.length === 0 && node.textContent.trim() === '') {
-                            childParas.push(new Paragraph({ children: [new TextRun('')], alignment: currentAlignment }));
-                        }
-                        
-                        return childParas;
-                    }
-                    
-                    return paragraphs;
-                }
-                
-                // Process all top-level nodes
-                const allParagraphs = [];
-                for (let child of editor.childNodes) {
-                    const paras = await processNode(child, AlignmentType.LEFT);
-                    allParagraphs.push(...paras);
-                }
-                
-                if (allParagraphs.length === 0) {
-                    allParagraphs.push(new Paragraph({ children: [new TextRun('Empty document')] }));
-                }
-                
-                // Create and save document
-                const doc = new Document({
-                    sections: [{ properties: {}, children: allParagraphs }]
-                });
-                
-                const blob = await Packer.toBlob(doc);
-                saveBlob(blob, `WordPad_${new Date().toISOString().slice(0,19)}.docx`);
-                
-                updateClipboardStatus("✅ DOCX exported successfully!", false);
-                setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-                
-            } catch (error) {
-                console.error('Export error:', error);
-                alert('Export failed: ' + error.message);
-                updateClipboardStatus("❌ Export failed: " + error.message, true);
-            } finally {
-                exportBtn.innerHTML = originalText;
-                exportBtn.disabled = false;
+            // Helper to get font styling from element
+            function getRunProperties(element) {
+                const props = {};
+                if (!element) return props;
+                const fontWeight = window.getComputedStyle(element).fontWeight;
+                const fontStyle = window.getComputedStyle(element).fontStyle;
+                const textDecoration = window.getComputedStyle(element).textDecoration;
+                if (fontWeight === '700' || fontWeight === 'bold' || fontWeight === 'bolder') props.bold = true;
+                if (fontStyle === 'italic') props.italics = true;
+                if (textDecoration.includes('underline')) props.underline = { type: UnderlineType.SINGLE };
+                return props;
             }
-        });
-        
-        updateActiveStates();
-    })();
+            
+            // Convert base64 to Uint8Array
+            function base64ToUint8Array(base64) {
+                const binaryString = atob(base64);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes;
+            }
+            
+            // Recursively process nodes and build paragraphs
+            async function processNode(node, currentAlignment = AlignmentType.LEFT) {
+                const elements = [];
+                
+                // Text node
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent;
+                    if (text && text.trim() !== '') {
+                        const parent = node.parentElement;
+                        const runProps = getRunProperties(parent);
+                        // Handle multiple lines within text node
+                        const lines = text.split('\n');
+                        for (let i = 0; i < lines.length; i++) {
+                            if (lines[i] || i > 0) {
+                                elements.push(new TextRun({ text: lines[i] || ' ', ...runProps }));
+                                if (i < lines.length - 1) {
+                                    elements.push(new TextRun({ text: '\n', break: 1 }));
+                                }
+                            }
+                        }
+                    }
+                    return elements;
+                }
+                
+                // Element node
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    const tagName = node.tagName.toLowerCase();
+                    
+                    // Handle images
+                    if (tagName === 'img') {
+                        try {
+                            const src = node.src;
+                            if (src) {
+                                let imageBuffer;
+                                if (src.startsWith('data:')) {
+                                    // Extract base64 data (remove data:image/...;base64, prefix)
+                                    const base64Data = src.split(',')[1];
+                                    imageBuffer = base64ToUint8Array(base64Data);
+                                } else {
+                                    // Fetch external image
+                                    const response = await fetch(src);
+                                    const blob = await response.blob();
+                                    const arrayBuffer = await blob.arrayBuffer();
+                                    imageBuffer = new Uint8Array(arrayBuffer);
+                                }
+                                
+                                const imageRun = new ImageRun({
+                                    data: imageBuffer,
+                                    transformation: { width: 400, height: 300 },
+                                    altText: { title: node.alt || 'Image', description: 'Embedded image' }
+                                });
+                                return [imageRun];
+                            }
+                        } catch (err) {
+                            console.warn('Image processing error:', err);
+                            return [new TextRun({ text: '[Image failed to load]' })];
+                        }
+                        return [];
+                    }
+                    
+                    // Handle line break
+                    if (tagName === 'br') {
+                        return [new TextRun({ text: '\n', break: 1 })];
+                    }
+                    
+                    // Process children
+                    const childElements = [];
+                    const align = getAlignment(node);
+                    
+                    for (let child of node.childNodes) {
+                        const childResult = await processNode(child, align);
+                        childElements.push(...childResult);
+                    }
+                    
+                    // If this is a block element, wrap children in a paragraph
+                    const blockTags = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'section', 'article'];
+                    if (blockTags.includes(tagName)) {
+                        if (childElements.length === 0) {
+                            // Empty paragraph - add a space to preserve structure
+                            return [new Paragraph({ children: [new TextRun('')], alignment: align })];
+                        }
+                        return [new Paragraph({ children: childElements, alignment: align })];
+                    }
+                    
+                    // Inline elements - just return the child elements
+                    return childElements;
+                }
+                
+                return [];
+            }
+            
+            // Process all top-level nodes in the editor
+            const allParagraphs = [];
+            for (let child of editor.childNodes) {
+                const result = await processNode(child, AlignmentType.LEFT);
+                if (Array.isArray(result)) {
+                    for (const item of result) {
+                        if (item instanceof Paragraph) {
+                            allParagraphs.push(item);
+                        } else if (item instanceof TextRun) {
+                            allParagraphs.push(new Paragraph({ children: [item], alignment: AlignmentType.LEFT }));
+                        }
+                    }
+                }
+            }
+            
+            // If no content, add a default paragraph
+            if (allParagraphs.length === 0) {
+                allParagraphs.push(new Paragraph({ children: [new TextRun('Empty document')] }));
+            }
+            
+            // Create the document
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: allParagraphs
+                }]
+            });
+            
+            // Generate and save blob
+            const blob = await Packer.toBlob(doc);
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            saveAs(blob, `WordPad_${timestamp}.docx`);
+            
+            updateClipboardStatus("✅ DOCX exported successfully with images!", false);
+            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
+            
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Export failed: ' + error.message);
+            updateClipboardStatus("❌ Export failed: " + error.message, true);
+        } finally {
+            exportBtn.innerHTML = originalText;
+            exportBtn.disabled = false;
+        }
+    });
+    
+    // Initialize active states
+    updateActiveStates();
+    
+    console.log("WordPad ready - using docx 9.7.1 with full image support");
 </script>
 </body>
 </html>
