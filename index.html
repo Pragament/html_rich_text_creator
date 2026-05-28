@@ -490,12 +490,32 @@
         tocContainer.appendChild(container);
     }
     
+    function downloadBlob(blob, filename) {
+        if (typeof saveAs === 'function') {
+            saveAs(blob, filename);
+            return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function safeTimestamp() {
+        return new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    }
+
     // Export TOC as JSON
     function exportTOCAsJSON() {
         const tree = buildTOCNodes();
         const jsonStr = JSON.stringify(tree, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json' });
-        saveAs(blob, `toc_export_${new Date().toISOString().slice(0,19)}.json`);
+        downloadBlob(blob, `toc_export_${safeTimestamp()}.json`);
         updateStatus("TOC exported as JSON", false);
     }
     
@@ -608,13 +628,16 @@
     // Keyboard shortcuts
     editor.addEventListener('keydown', (e) => {
         if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'b') { e.preventDefault(); execCmd('bold'); }
-            else if (e.key === 'i') { e.preventDefault(); execCmd('italic'); }
-            else if (e.key === 'u') { e.preventDefault(); execCmd('underline'); }
-            else if (e.key === 'z') { e.preventDefault(); execCmd('undo'); }
-            else if (e.key === 'y') { e.preventDefault(); execCmd('redo'); }
-            else if (e.shiftKey && e.key === '7') { e.preventDefault(); execCmd('insertOrderedList'); }
-            else if (e.shiftKey && e.key === '8') { e.preventDefault(); execCmd('insertUnorderedList'); }
+            const key = e.key.toLowerCase();
+            if (e.shiftKey && (e.code === 'Digit7' || e.key === '7' || e.key === '&')) { e.preventDefault(); execCmd('insertOrderedList'); }
+            else if (e.shiftKey && (e.code === 'Digit8' || e.key === '8' || e.key === '*')) { e.preventDefault(); execCmd('insertUnorderedList'); }
+            else if (e.shiftKey && key === 'z') { e.preventDefault(); execCmd('redo'); }
+            else if (key === 'b') { e.preventDefault(); execCmd('bold'); }
+            else if (key === 'i') { e.preventDefault(); execCmd('italic'); }
+            else if (key === 'u') { e.preventDefault(); execCmd('underline'); }
+            else if (key === 'z') { e.preventDefault(); execCmd('undo'); }
+            else if (key === 'y') { e.preventDefault(); execCmd('redo'); }
+            else if (e.code === 'Space' || key === ' ') { e.preventDefault(); execCmd('removeFormat'); }
         }
         if (e.key === 'Tab') {
             e.preventDefault();
@@ -653,6 +676,43 @@
                 for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
                 return arr;
             }
+            async function processInlineChildren(node) {
+                let runs = [];
+                for (let child of node.childNodes) {
+                    if (child.nodeType === Node.ELEMENT_NODE && ['ul', 'ol'].includes(child.tagName.toLowerCase())) continue;
+                    if (child.nodeType === Node.ELEMENT_NODE && ['p', 'div'].includes(child.tagName.toLowerCase())) {
+                        runs.push(...await processInlineChildren(child));
+                        continue;
+                    }
+                    runs.push(...await processNode(child, getAlignment(node)));
+                }
+                return runs.length ? runs : [new TextRun("")];
+            }
+
+            async function processList(listNode, level = 0) {
+                const paragraphs = [];
+                const isOrdered = listNode.tagName.toLowerCase() === 'ol';
+                const items = Array.from(listNode.children).filter(child => child.tagName?.toLowerCase() === 'li');
+
+                for (let i = 0; i < items.length; i++) {
+                    const li = items[i];
+                    const prefix = isOrdered ? `${i + 1}. ` : '• ';
+                    const children = [new TextRun(prefix), ...await processInlineChildren(li)];
+                    paragraphs.push(new Paragraph({
+                        children,
+                        alignment: getAlignment(li),
+                        indent: { left: level * 360 },
+                    }));
+
+                    for (let child of li.children) {
+                        const tag = child.tagName?.toLowerCase();
+                        if (tag === 'ul' || tag === 'ol') paragraphs.push(...await processList(child, level + 1));
+                    }
+                }
+
+                return paragraphs;
+            }
+
             async function processNode(node, align = AlignmentType.LEFT) {
                 if (node.nodeType === Node.TEXT_NODE) {
                     const text = node.textContent;
@@ -670,9 +730,10 @@
                         } catch(e) { return [new TextRun("[Image]")]; }
                     }
                     if (tag === 'br') return [new TextRun({ text: "\n", break: 1 })];
+                    if (tag === 'ul' || tag === 'ol') return processList(node);
                     let childRuns = [];
                     for (let child of node.childNodes) childRuns.push(...await processNode(child, getAlignment(node)));
-                    const block = ['p','div','h1','h2','h3','h4','ul','ol','li'];
+                    const block = ['p','div','h1','h2','h3','h4','li'];
                     if (block.includes(tag)) {
                         let heading = null;
                         if (tag === 'h1') heading = HeadingLevel.HEADING_1;
@@ -696,7 +757,7 @@
             if (!allParas.length) allParas.push(new Paragraph({ children: [new TextRun("Empty")] }));
             const doc = new Document({ sections: [{ properties: {}, children: allParas }] });
             const blob = await Packer.toBlob(doc);
-            saveAs(blob, `WordPad_${Date.now()}.docx`);
+            downloadBlob(blob, `WordPad_${safeTimestamp()}.docx`);
             updateStatus("DOCX ready", false);
         } catch(e) { alert("Export error: "+e.message); updateStatus("Export failed", true); }
         finally { btn.innerHTML = orig; btn.disabled = false; }
