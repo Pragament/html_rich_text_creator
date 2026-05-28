@@ -366,6 +366,281 @@
             }
         });
         
+        const DOCX_SCRIPT_URLS = [
+            'https://unpkg.com/docx@8.5.0/build/index.js',
+            'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js'
+        ];
+        let docxLoadPromise = null;
+
+        function isDocxReady() {
+            return Boolean(window.docx && window.docx.Document && window.docx.Packer);
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`Failed to load ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+
+        async function ensureDocxLoaded() {
+            if (isDocxReady()) return window.docx;
+            if (docxLoadPromise) return docxLoadPromise;
+
+            docxLoadPromise = (async () => {
+                updateClipboardStatus("Loading DOCX exporter...", false);
+                for (const src of DOCX_SCRIPT_URLS) {
+                    try {
+                        await loadScript(src);
+                        if (isDocxReady()) return window.docx;
+                    } catch (err) {
+                        console.warn('DOCX library load failed:', err);
+                    }
+                }
+                return null;
+            })();
+
+            try {
+                return await docxLoadPromise;
+            } catch (err) {
+                docxLoadPromise = null;
+                throw err;
+            }
+        }
+
+        function escapeXml(value) {
+            return value
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function dosDateTime(date) {
+            let dosTime = date.getSeconds() >> 1;
+            dosTime |= date.getMinutes() << 5;
+            dosTime |= date.getHours() << 11;
+            let dosDate = date.getDate();
+            dosDate |= (date.getMonth() + 1) << 5;
+            dosDate |= (date.getFullYear() - 1980) << 9;
+            return { dosDate, dosTime };
+        }
+
+        function crc32(bytes) {
+            let crc = -1;
+            for (let i = 0; i < bytes.length; i++) {
+                crc ^= bytes[i];
+                for (let j = 0; j < 8; j++) {
+                    crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+                }
+            }
+            return (crc ^ -1) >>> 0;
+        }
+
+        function createZip(files) {
+            const encoder = new TextEncoder();
+            const fileRecords = [];
+            const chunks = [];
+            let offset = 0;
+            const now = dosDateTime(new Date());
+
+            function uint16(value) {
+                return [value & 255, (value >>> 8) & 255];
+            }
+
+            function uint32(value) {
+                return [value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255];
+            }
+
+            for (const file of files) {
+                const nameBytes = encoder.encode(file.name);
+                const data = typeof file.data === 'string' ? encoder.encode(file.data) : new Uint8Array(file.data);
+                const checksum = crc32(data);
+                const localHeader = new Uint8Array([
+                    ...uint32(0x04034b50), ...uint16(20), ...uint16(0), ...uint16(0),
+                    ...uint16(now.dosTime), ...uint16(now.dosDate), ...uint32(checksum),
+                    ...uint32(data.length), ...uint32(data.length), ...uint16(nameBytes.length), ...uint16(0)
+                ]);
+                chunks.push(localHeader, nameBytes, data);
+                fileRecords.push({ nameBytes, data, checksum, offset });
+                offset += localHeader.length + nameBytes.length + data.length;
+            }
+
+            const centralDirectoryOffset = offset;
+            for (const file of fileRecords) {
+                const centralHeader = new Uint8Array([
+                    ...uint32(0x02014b50), ...uint16(20), ...uint16(20), ...uint16(0), ...uint16(0),
+                    ...uint16(now.dosTime), ...uint16(now.dosDate), ...uint32(file.checksum),
+                    ...uint32(file.data.length), ...uint32(file.data.length), ...uint16(file.nameBytes.length),
+                    ...uint16(0), ...uint16(0), ...uint16(0), ...uint16(0), ...uint32(0), ...uint32(file.offset)
+                ]);
+                chunks.push(centralHeader, file.nameBytes);
+                offset += centralHeader.length + file.nameBytes.length;
+            }
+
+            const centralDirectorySize = offset - centralDirectoryOffset;
+            chunks.push(new Uint8Array([
+                ...uint32(0x06054b50), ...uint16(0), ...uint16(0), ...uint16(fileRecords.length),
+                ...uint16(fileRecords.length), ...uint32(centralDirectorySize),
+                ...uint32(centralDirectoryOffset), ...uint16(0)
+            ]));
+
+            return new Blob(chunks, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        }
+
+        function paragraphXml(children, alignment = 'left') {
+            const alignValue = alignment === 'justify' ? 'both' : alignment;
+            return `<w:p><w:pPr><w:jc w:val="${alignValue}"/></w:pPr>${children}</w:p>`;
+        }
+
+        function textRunXml(text, styles = {}) {
+            const styleXml = [
+                styles.bold ? '<w:b/>' : '',
+                styles.italics ? '<w:i/>' : '',
+                styles.underline ? '<w:u w:val="single"/>' : ''
+            ].join('');
+            const space = /^\s|\s$/.test(text) ? ' xml:space="preserve"' : '';
+            return `<w:r>${styleXml ? `<w:rPr>${styleXml}</w:rPr>` : ''}<w:t${space}>${escapeXml(text)}</w:t></w:r>`;
+        }
+
+        async function imageParagraphXml(node, imageIndex, relationshipId, alignment) {
+            const src = node.src;
+            let bytes;
+            let mime = 'image/png';
+            if (src.startsWith('data:')) {
+                const [meta, base64Data] = src.split(',');
+                mime = (meta.match(/^data:([^;]+)/) || [])[1] || mime;
+                bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            } else {
+                const response = await fetch(src);
+                const blob = await response.blob();
+                mime = blob.type || mime;
+                bytes = new Uint8Array(await blob.arrayBuffer());
+            }
+
+            const extension = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : mime.includes('gif') ? 'gif' : 'png';
+            const width = Math.min(node.naturalWidth || 400, 400);
+            const height = Math.round((node.naturalHeight || 300) * (width / (node.naturalWidth || 400)));
+            const cx = width * 9525;
+            const cy = height * 9525;
+            const name = `image${imageIndex}.${extension}`;
+            const xml = paragraphXml(
+                `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+                `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${imageIndex}" name="${name}"/>` +
+                `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+                `<pic:pic><pic:nvPicPr><pic:cNvPr id="${imageIndex}" name="${name}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+                `<pic:blipFill><a:blip r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+                `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+                `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`,
+                alignment
+            );
+            return { xml, name, bytes };
+        }
+
+        async function buildFallbackDocxBlob(root) {
+            updateClipboardStatus("Using built-in DOCX exporter...", false);
+            const imageFiles = [];
+            const relationships = [];
+            const paragraphs = [];
+            let relationshipCounter = 1;
+            let imageCounter = 1;
+
+            function getAlignment(element) {
+                const textAlign = window.getComputedStyle(element).textAlign;
+                if (textAlign === 'center' || textAlign === 'right' || textAlign === 'justify') return textAlign;
+                return 'left';
+            }
+
+            function getStyles(element, inherited = {}) {
+                if (!element) return inherited;
+                const computed = window.getComputedStyle(element);
+                return {
+                    bold: inherited.bold || computed.fontWeight === '700' || computed.fontWeight === 'bold',
+                    italics: inherited.italics || computed.fontStyle === 'italic',
+                    underline: inherited.underline || computed.textDecoration.includes('underline')
+                };
+            }
+
+            function collectTextRuns(node, styles = {}) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return node.textContent ? textRunXml(node.textContent, styles) : '';
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE || node.tagName.toLowerCase() === 'img') return '';
+                const nextStyles = getStyles(node, styles);
+                let xml = '';
+                for (const child of node.childNodes) xml += collectTextRuns(child, nextStyles);
+                return xml;
+            }
+
+            for (const node of root.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+                    paragraphs.push(paragraphXml(textRunXml(node.textContent), 'left'));
+                    continue;
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+                const alignment = getAlignment(node);
+                if (node.tagName.toLowerCase() === 'img') {
+                    const relationshipId = `rId${relationshipCounter++}`;
+                    const image = await imageParagraphXml(node, imageCounter++, relationshipId, alignment);
+                    imageFiles.push(image);
+                    relationships.push(`<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${image.name}"/>`);
+                    paragraphs.push(image.xml);
+                    continue;
+                }
+
+                const textXml = collectTextRuns(node);
+                if (textXml) paragraphs.push(paragraphXml(textXml, alignment));
+
+                for (const imageNode of node.querySelectorAll('img')) {
+                    const relationshipId = `rId${relationshipCounter++}`;
+                    const image = await imageParagraphXml(imageNode, imageCounter++, relationshipId, alignment);
+                    imageFiles.push(image);
+                    relationships.push(`<Relationship Id="${relationshipId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${image.name}"/>`);
+                    paragraphs.push(image.xml);
+                }
+            }
+
+            if (paragraphs.length === 0) paragraphs.push(paragraphXml(textRunXml('Empty document')));
+
+            const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
+            const packageRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+            const documentRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationships.join('')}</Relationships>`;
+            const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${paragraphs.join('')}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
+            const coreXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>WordPad Export</dc:title><dc:creator>Rich Text WordPad</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`;
+            const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Rich Text WordPad</Application></Properties>`;
+
+            return createZip([
+                { name: '[Content_Types].xml', data: contentTypes },
+                { name: '_rels/.rels', data: packageRels },
+                { name: 'word/document.xml', data: documentXml },
+                { name: 'word/_rels/document.xml.rels', data: documentRels },
+                { name: 'docProps/core.xml', data: coreXml },
+                { name: 'docProps/app.xml', data: appXml },
+                ...imageFiles.map(image => ({ name: `word/media/${image.name}`, data: image.bytes }))
+            ]);
+        }
+
+        function saveBlob(blob, fileName) {
+            if (typeof window.saveAs === 'function') {
+                window.saveAs(blob, fileName);
+                return;
+            }
+
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
         // EXPORT TO DOCX
         document.getElementById('exportDocxBtn').addEventListener('click', async () => {
             const exportBtn = document.getElementById('exportDocxBtn');
@@ -375,12 +650,16 @@
                 exportBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Generating...';
                 exportBtn.disabled = true;
                 
-                // Wait for docx library to be available
-                if (typeof docx === 'undefined') {
-                    throw new Error('DOCX library not loaded. Please refresh the page.');
+                const loadedDocx = await ensureDocxLoaded();
+                if (!loadedDocx) {
+                    const blob = await buildFallbackDocxBlob(editor);
+                    saveBlob(blob, `WordPad_${new Date().toISOString().slice(0,19)}.docx`);
+                    updateClipboardStatus("✅ DOCX exported successfully!", false);
+                    setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
+                    return;
                 }
-                
-                const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType } = docx;
+
+                const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType } = loadedDocx;
                 
                 // Helper to get alignment
                 function getAlignment(element) {
@@ -482,7 +761,7 @@
                 });
                 
                 const blob = await Packer.toBlob(doc);
-                saveAs(blob, `WordPad_${new Date().toISOString().slice(0,19)}.docx`);
+                saveBlob(blob, `WordPad_${new Date().toISOString().slice(0,19)}.docx`);
                 
                 updateClipboardStatus("✅ DOCX exported successfully!", false);
                 setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
