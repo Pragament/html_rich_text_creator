@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Rich WordPad - Clipboard Images & DOCX Export (v9.7.1)</title>
-    <!-- FileSaver.js for blob saving -->
+    <title>Advanced WordPad - Collapsible TOC | Live Heading Dropdown & JSON Export</title>
+    <!-- FileSaver.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <!-- Use the exact working docx 9.7.1 ES module from jsDelivr with proper CORS -->
+    <!-- docx 9.7.1 ES module -->
     <script type="importmap">
         {
             "imports": {
@@ -22,246 +22,510 @@
         }
 
         body {
-            background: linear-gradient(145deg, #e0e5ec 0%, #f0f4fa 100%);
+            background: #e2e8f0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
             margin: 0;
             padding: 20px;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        .wordpad-container {
-            width: 1300px;
-            max-width: 98vw;
+        /* Main app layout with sidebar */
+        .app-layout {
+            display: flex;
+            height: calc(100vh - 40px);
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* Table of Contents Sidebar */
+        .toc-sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .toc-header {
+            background: #f8fafc;
+            padding: 18px 20px;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #1e293b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toc-header button {
+            background: #e2e8f0;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: 0.2s;
+        }
+        .toc-header button:hover { background: #cbd5e1; }
+
+        .toc-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        /* Collapsible tree structure */
+        .toc-node {
+            margin: 4px 0;
+            user-select: none;
+        }
+        .toc-item-wrapper {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: 0.1s;
+            gap: 8px;
+        }
+        .toc-item-wrapper:hover {
+            background: #f1f5f9;
+        }
+        .toggle-icon {
+            width: 20px;
+            font-size: 12px;
+            color: #64748b;
+            text-align: center;
+            cursor: pointer;
+        }
+        .toc-title {
+            flex: 1;
+            font-size: 0.85rem;
+            color: #334155;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .toc-title.h1 { font-weight: 700; font-size: 0.95rem; color: #0f172a; }
+        .toc-title.h2 { margin-left: 4px; font-weight: 500; }
+        .toc-title.h3 { margin-left: 8px; font-size: 0.8rem; color: #475569; }
+        .toc-title.h4 { margin-left: 12px; font-size: 0.75rem; color: #64748b; }
+        .children-container {
+            margin-left: 24px;
+            display: block;
+        }
+        .children-container.collapsed {
+            display: none;
+        }
+
+        /* Main Editor Panel */
+        .main-panel {
+            flex: 1;
             background: #ffffff;
             border-radius: 28px;
-            box-shadow: 0 25px 45px -12px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
         }
 
         .toolbar {
-            background: rgba(248, 250, 252, 0.98);
-            border-bottom: 1px solid #dce3ec;
+            background: #fefefe;
+            border-bottom: 1px solid #e9edf2;
             padding: 12px 20px;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         .tool-group {
             display: flex;
             align-items: center;
-            background: #f1f5f9;
-            border-radius: 48px;
+            background: #f8fafc;
+            border-radius: 40px;
             padding: 4px 8px;
-            gap: 6px;
-            margin-right: 6px;
+            gap: 4px;
+            margin-right: 8px;
         }
 
         .tool-btn {
             background: transparent;
             border: none;
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             width: 36px;
             height: 36px;
             border-radius: 40px;
             cursor: pointer;
             transition: 0.2s;
-            color: #1e293b;
+            color: #334155;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            position: relative;
         }
 
         .tool-btn:hover {
             background: #e2e8f0;
-            transform: scale(1.02);
         }
-
         .tool-btn.active {
             background: #cbd5e1;
             color: #0f172a;
+        }
+        .tool-btn .shortcut-hint {
+            position: absolute;
+            bottom: -2px;
+            right: 2px;
+            font-size: 8px;
+            background: #334155;
+            color: white;
+            padding: 1px 3px;
+            border-radius: 6px;
+            font-weight: bold;
+            white-space: nowrap;
         }
 
         select.tool-select {
             background: white;
             border: 1px solid #cbd5e1;
             border-radius: 28px;
-            padding: 6px 12px;
+            padding: 6px 10px;
             font-size: 0.8rem;
-            font-weight: 500;
             cursor: pointer;
-            font-family: monospace;
         }
-
         .separator {
             width: 1px;
             height: 28px;
             background: #cbd5e6;
-            margin: 0 8px;
+            margin: 0 6px;
         }
 
         .editor-wrapper {
-            padding: 20px 25px 25px 25px;
-            background: #fefefe;
+            padding: 20px 28px;
+            background: #ffffff;
+            flex: 1;
+            overflow-y: auto;
         }
 
         .rich-editor {
-            min-height: 520px;
-            max-height: 65vh;
-            overflow-y: auto;
-            background: white;
-            border-radius: 20px;
-            border: 1px solid #e9edf2;
-            padding: 20px 24px;
-            font-size: 1rem;
-            line-height: 1.5;
+            min-height: 100%;
             outline: none;
+            font-size: 1rem;
+            line-height: 1.6;
             font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
         }
-
-        .rich-editor:focus {
-            border-color: #94a3b8;
-            box-shadow: 0 0 0 2px rgba(100, 116, 139, 0.2);
-        }
-
-        .rich-editor img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            margin: 8px 0;
-            display: inline-block;
-        }
+        .rich-editor h1 { font-size: 2rem; margin: 0.8rem 0; font-weight: 700; border-left: 5px solid #3b82f6; padding-left: 16px; }
+        .rich-editor h2 { font-size: 1.5rem; margin: 0.7rem 0; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; }
+        .rich-editor h3 { font-size: 1.25rem; margin: 0.6rem 0; color: #334155; }
+        .rich-editor h4 { font-size: 1.1rem; margin: 0.5rem 0; color: #475569; font-style: italic; }
+        .rich-editor ul, .rich-editor ol { margin: 0.5rem 0; padding-left: 2rem; }
+        .rich-editor img { max-width: 100%; border-radius: 12px; margin: 10px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 
         .status-bar {
             background: #f8fafc;
-            padding: 10px 24px;
-            font-size: 0.75rem;
+            padding: 8px 24px;
+            font-size: 0.7rem;
             color: #475569;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #e9edf2;
             display: flex;
             justify-content: space-between;
-            align-items: center;
         }
-
-        .clipboard-info {
-            background: #eef2ff;
-            padding: 4px 12px;
-            border-radius: 36px;
-            font-weight: 500;
-        }
-
-        .export-btn {
-            background: #1e293b;
-            color: white;
-            padding: 6px 16px;
-            border-radius: 40px;
-            font-weight: 600;
-            gap: 8px;
-        }
-
-        .export-btn i {
-            color: #facc15;
-        }
-
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        @media (max-width: 700px) {
-            .toolbar { padding: 12px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        @media (max-width: 800px) {
+            .toc-sidebar { width: 260px; }
             .tool-btn { width: 32px; height: 32px; font-size: 1rem; }
         }
     </style>
 </head>
 <body>
-<div class="wordpad-container">
-    <!-- Top Toolbar -->
-    <div class="toolbar">
-        <div class="tool-group">
-            <button class="tool-btn" id="boldBtn" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
-            <button class="tool-btn" id="italicBtn" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
-            <button class="tool-btn" id="underlineBtn" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
+<div class="app-layout">
+    <!-- LEFT SIDEBAR: COLLAPSIBLE TABLE OF CONTENTS -->
+    <div class="toc-sidebar">
+        <div class="toc-header">
+            <span><i class="fas fa-list-tree"></i> Table of Contents</span>
+            <button id="exportTocJsonBtn" title="Export TOC as JSON"><i class="fas fa-download"></i> JSON</button>
         </div>
-        <div class="tool-group">
-            <button class="tool-btn" id="alignLeftBtn" title="Align Left"><i class="fas fa-align-left"></i></button>
-            <button class="tool-btn" id="alignCenterBtn" title="Center"><i class="fas fa-align-center"></i></button>
-            <button class="tool-btn" id="alignRightBtn" title="Align Right"><i class="fas fa-align-right"></i></button>
-            <button class="tool-btn" id="alignJustifyBtn" title="Justify"><i class="fas fa-align-justify"></i></button>
-        </div>
-        <div class="tool-group">
-            <button class="tool-btn" id="insertImageClipboardBtn" title="Paste Image from Clipboard"><i class="fas fa-image"></i> <span style="font-size:12px;">📋</span></button>
-            <button class="tool-btn" id="insertLocalImageBtn" title="Upload Local Image"><i class="fas fa-file-image"></i></button>
-            <input type="file" id="localImageInput" accept="image/*" style="display: none;">
-        </div>
-        <div class="separator"></div>
-        <div class="tool-group">
-            <select id="fontFamilySelect" class="tool-select">
-                <option value="Segoe UI, sans-serif">Segoe UI</option>
-                <option value="Arial, sans-serif">Arial</option>
-                <option value="Georgia, serif">Georgia</option>
-                <option value="Courier New, monospace">Courier New</option>
-                <option value="Times New Roman, serif">Times New Roman</option>
-            </select>
-            <select id="fontSizeSelect" class="tool-select">
-                <option value="1">Small (10px)</option>
-                <option value="2">Normal (13px)</option>
-                <option value="3" selected>Medium (16px)</option>
-                <option value="4">Large (20px)</option>
-                <option value="5">Huge (28px)</option>
-            </select>
-            <button class="tool-btn" id="clearFormatBtn" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
-        </div>
-        <div style="flex:1"></div>
-        <div class="tool-group">
-            <button class="tool-btn export-btn" id="exportDocxBtn"><i class="fas fa-file-word"></i> Export .DOCX</button>
+        <div class="toc-content" id="tocContainer">
+            <div style="color:#94a3b8; text-align:center; padding:20px;">No headings yet</div>
         </div>
     </div>
 
-    <!-- Rich Text Editor -->
-    <div class="editor-wrapper">
-        <div id="richEditor" class="rich-editor" contenteditable="true">
-            <p><strong>✨ Rich WordPad</strong> — write, style text, and insert images from clipboard or local.</p>
-            <p>👉 Copy an image (Ctrl+C) from anywhere, then click <i class="fas fa-image"></i> <strong>📋 Paste Image from Clipboard</strong>.</p>
-            <p>Images will be embedded and exported to DOCX with full quality.</p>
-            <p style="margin-top:12px">Happy editing!</p>
+    <!-- MAIN EDITOR PANEL -->
+    <div class="main-panel">
+        <div class="toolbar">
+            <!-- Text Style Group -->
+            <div class="tool-group">
+                <button class="tool-btn" id="boldBtn" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i><span class="shortcut-hint">⌘B</span></button>
+                <button class="tool-btn" id="italicBtn" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i><span class="shortcut-hint">⌘I</span></button>
+                <button class="tool-btn" id="underlineBtn" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i><span class="shortcut-hint">⌘U</span></button>
+            </div>
+            <!-- Alignment -->
+            <div class="tool-group">
+                <button class="tool-btn" id="alignLeftBtn" title="Align Left"><i class="fas fa-align-left"></i></button>
+                <button class="tool-btn" id="alignCenterBtn" title="Center"><i class="fas fa-align-center"></i></button>
+                <button class="tool-btn" id="alignRightBtn" title="Align Right"><i class="fas fa-align-right"></i></button>
+                <button class="tool-btn" id="alignJustifyBtn" title="Justify"><i class="fas fa-align-justify"></i></button>
+            </div>
+            <!-- Lists & Indent -->
+            <div class="tool-group">
+                <button class="tool-btn" id="unorderedListBtn" title="Bulleted List (Ctrl+Shift+8)"><i class="fas fa-list-ul"></i><span class="shortcut-hint">⇧8</span></button>
+                <button class="tool-btn" id="orderedListBtn" title="Numbered List (Ctrl+Shift+7)"><i class="fas fa-list-ol"></i><span class="shortcut-hint">⇧7</span></button>
+                <button class="tool-btn" id="indentBtn" title="Increase Indent (Tab)"><i class="fas fa-indent"></i><span class="shortcut-hint">Tab</span></button>
+                <button class="tool-btn" id="outdentBtn" title="Decrease Indent (Shift+Tab)"><i class="fas fa-outdent"></i><span class="shortcut-hint">⇥Tab</span></button>
+            </div>
+            <!-- Undo / Redo -->
+            <div class="tool-group">
+                <button class="tool-btn" id="undoBtn" title="Undo (Ctrl+Z)"><i class="fas fa-undo-alt"></i><span class="shortcut-hint">⌘Z</span></button>
+                <button class="tool-btn" id="redoBtn" title="Redo (Ctrl+Y)"><i class="fas fa-redo-alt"></i><span class="shortcut-hint">⌘Y</span></button>
+            </div>
+            <!-- Headings Dropdown (LIVE updates based on selection) -->
+            <div class="tool-group">
+                <select id="headingSelect" class="tool-select">
+                    <option value="p">Normal Text</option>
+                    <option value="H1">Heading 1 (H1)</option>
+                    <option value="H2">Heading 2 (H2)</option>
+                    <option value="H3">Heading 3 (H3)</option>
+                    <option value="H4">Heading 4 (H4)</option>
+                </select>
+            </div>
+            <!-- Fonts & Size -->
+            <div class="tool-group">
+                <select id="fontFamilySelect" class="tool-select">
+                    <option value="Segoe UI, sans-serif">Segoe UI</option>
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="Courier New, monospace">Courier New</option>
+                </select>
+                <select id="fontSizeSelect" class="tool-select">
+                    <option value="1">Small</option><option value="2">Normal</option><option value="3" selected>Medium</option>
+                    <option value="4">Large</option><option value="5">Huge</option>
+                </select>
+                <button class="tool-btn" id="clearFormatBtn" title="Clear Format (Ctrl+Space)"><i class="fas fa-eraser"></i></button>
+            </div>
+            <!-- Images -->
+            <div class="tool-group">
+                <button class="tool-btn" id="insertImageClipboardBtn" title="Paste Image from Clipboard"><i class="fas fa-image"></i><span class="shortcut-hint">📋</span></button>
+                <button class="tool-btn" id="insertLocalImageBtn" title="Upload Local Image"><i class="fas fa-file-image"></i></button>
+                <input type="file" id="localImageInput" accept="image/*" style="display:none">
+            </div>
+            <div class="separator"></div>
+            <button class="tool-btn export-btn" id="exportDocxBtn" style="background:#1e293b; color:white; padding:0 16px;"><i class="fas fa-file-word"></i> Export DOCX</button>
         </div>
-    </div>
 
-    <div class="status-bar">
-        <span><i class="fas fa-info-circle"></i> Tip: Use toolbar buttons or keyboard shortcuts</span>
-        <span class="clipboard-info" id="clipboardStatus">📋 Ready</span>
+        <div class="editor-wrapper">
+            <div id="richEditor" class="rich-editor" contenteditable="true">
+                <h1>Interactive WordPad</h1>
+                <p>Select any heading or text → the <strong>Heading dropdown</strong> updates automatically. The <strong>Table of Contents</strong> is collapsible and exportable as JSON.</p>
+                <h2>Features Demo</h2>
+                <ul><li>Click on headings to see dropdown change.</li><li>Sidebar items can be collapsed/expanded.</li></ul>
+                <h3>Sub-section</h3>
+                <p>Real-time heading detection works with any selection.</p>
+                <h4>Deep note</h4>
+                <p>Collapsible TOC supports nested levels.</p>
+                <h2>JSON Export</h2>
+                <p>Use the JSON button in TOC header to export structure.</p>
+            </div>
+        </div>
+        <div class="status-bar">
+            <span><i class="fas fa-keyboard"></i> Shortcuts on buttons | Heading dropdown syncs with cursor</span>
+            <span id="clipboardStatus"><i class="fas fa-check-circle"></i> Ready</span>
+        </div>
     </div>
 </div>
 
 <script type="module">
-    // Import docx library from the working CDN (version 9.7.1)
     import * as docx from 'docx';
     
-    // Wait for DOM to be fully ready
     const editor = document.getElementById('richEditor');
+    const tocContainer = document.getElementById('tocContainer');
+    const headingSelect = document.getElementById('headingSelect');
     
-    // Helper: exec command
+    // ---------- Helper: get current block element (heading or paragraph) ----------
+    function getCurrentBlockElement() {
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return null;
+        let node = sel.getRangeAt(0).startContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+        // climb up until we find a block element or heading/p/div
+        while (node && node !== editor) {
+            const tag = node.tagName?.toLowerCase();
+            if (['h1','h2','h3','h4','p','div','section','article'].includes(tag)) return node;
+            node = node.parentElement;
+        }
+        return null;
+    }
+    
+    // Update Heading Dropdown based on current selection
+    function updateHeadingDropdownFromSelection() {
+        const block = getCurrentBlockElement();
+        if (!block) return;
+        const tag = block.tagName.toLowerCase();
+        if (tag === 'h1') headingSelect.value = 'H1';
+        else if (tag === 'h2') headingSelect.value = 'H2';
+        else if (tag === 'h3') headingSelect.value = 'H3';
+        else if (tag === 'h4') headingSelect.value = 'H4';
+        else headingSelect.value = 'p';
+    }
+    
+    // Apply heading change
+    headingSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'p') {
+            document.execCommand('formatBlock', false, '<p>');
+        } else {
+            document.execCommand('formatBlock', false, `<${val}>`);
+        }
+        editor.focus();
+        renderTOC();    // rebuild TOC
+        updateHeadingDropdownFromSelection(); // sync again after change
+    });
+    
+    // ---------- BUILD COLLAPSIBLE TREE STRUCTURE ----------
+    function buildTOCNodes() {
+        const headings = editor.querySelectorAll('h1, h2, h3, h4');
+        const nodes = [];
+        const stack = [{ level: 0, children: nodes, parent: null }];
+        
+        headings.forEach((heading, idx) => {
+            const tag = heading.tagName.toLowerCase();
+            let level = 1;
+            if (tag === 'h1') level = 1;
+            else if (tag === 'h2') level = 2;
+            else if (tag === 'h3') level = 3;
+            else if (tag === 'h4') level = 4;
+            
+            const text = heading.innerText.trim() || `Heading ${idx+1}`;
+            if (!heading.id) heading.id = `heading-${Date.now()}-${idx}-${Math.random()}`;
+            
+            const node = { id: heading.id, text, level, children: [] };
+            
+            while (stack.length > 1 && stack[stack.length-1].level >= level) stack.pop();
+            const parent = stack[stack.length-1];
+            parent.children.push(node);
+            stack.push({ level, children: node.children, parent: node });
+        });
+        return nodes;
+    }
+    
+    // Recursive render with collapsible support
+    let collapseState = {}; // store collapse by node id prefix or index
+    
+    function renderTOC() {
+        const tree = buildTOCNodes();
+        if (tree.length === 0) {
+            tocContainer.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:20px;">No headings yet</div>';
+            return;
+        }
+        
+        function renderNode(node, level) {
+            const nodeKey = node.id;
+            const isCollapsed = collapseState[nodeKey] === true;
+            const hasChildren = node.children && node.children.length > 0;
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'toc-node';
+            
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'toc-item-wrapper';
+            
+            // Toggle icon (if has children)
+            const toggleSpan = document.createElement('span');
+            toggleSpan.className = 'toggle-icon';
+            if (hasChildren) {
+                toggleSpan.innerHTML = isCollapsed ? '<i class="fas fa-chevron-right"></i>' : '<i class="fas fa-chevron-down"></i>';
+                toggleSpan.style.cursor = 'pointer';
+                toggleSpan.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    collapseState[nodeKey] = !isCollapsed;
+                    renderTOC();
+                });
+            } else {
+                toggleSpan.innerHTML = '•';
+                toggleSpan.style.opacity = '0.5';
+            }
+            
+            // Title span
+            const titleSpan = document.createElement('span');
+            titleSpan.className = `toc-title ${node.level === 1 ? 'h1' : (node.level === 2 ? 'h2' : (node.level === 3 ? 'h3' : 'h4'))}`;
+            titleSpan.innerText = node.text;
+            titleSpan.style.cursor = 'pointer';
+            titleSpan.addEventListener('click', (e) => {
+                const targetElem = document.getElementById(node.id);
+                if (targetElem) {
+                    targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    editor.focus();
+                }
+            });
+            
+            itemDiv.appendChild(toggleSpan);
+            itemDiv.appendChild(titleSpan);
+            wrapper.appendChild(itemDiv);
+            
+            // Children container
+            if (hasChildren) {
+                const childrenDiv = document.createElement('div');
+                childrenDiv.className = `children-container ${isCollapsed ? 'collapsed' : ''}`;
+                node.children.forEach(child => {
+                    childrenDiv.appendChild(renderNode(child, level+1));
+                });
+                wrapper.appendChild(childrenDiv);
+            }
+            return wrapper;
+        }
+        
+        const container = document.createElement('div');
+        tree.forEach(rootNode => {
+            container.appendChild(renderNode(rootNode, 1));
+        });
+        tocContainer.innerHTML = '';
+        tocContainer.appendChild(container);
+    }
+    
+    // Export TOC as JSON
+    function exportTOCAsJSON() {
+        const tree = buildTOCNodes();
+        const jsonStr = JSON.stringify(tree, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        saveAs(blob, `toc_export_${new Date().toISOString().slice(0,19)}.json`);
+        updateStatus("TOC exported as JSON", false);
+    }
+    
+    document.getElementById('exportTocJsonBtn').addEventListener('click', exportTOCAsJSON);
+    
+    // Observer to re-render TOC on editor changes
+    const observer = new MutationObserver(() => { renderTOC(); });
+    observer.observe(editor, { childList: true, subtree: true, characterData: true, attributes: true });
+    
+    // Listen to selection changes to update heading dropdown
+    document.addEventListener('selectionchange', () => {
+        updateHeadingDropdownFromSelection();
+        updateActiveStates();
+    });
+    editor.addEventListener('keyup', updateHeadingDropdownFromSelection);
+    editor.addEventListener('mouseup', updateHeadingDropdownFromSelection);
+    
+    // ---------- EXEC COMMAND ----------
     function execCmd(command, value = null) {
         document.execCommand(command, false, value);
         editor.focus();
+        renderTOC();
+        updateHeadingDropdownFromSelection();
     }
     
-    // Update active button states
     function updateActiveStates() {
         document.getElementById('boldBtn').classList.toggle('active', document.queryCommandState('bold'));
         document.getElementById('italicBtn').classList.toggle('active', document.queryCommandState('italic'));
         document.getElementById('underlineBtn').classList.toggle('active', document.queryCommandState('underline'));
     }
-    
-    editor.addEventListener('keyup', updateActiveStates);
-    editor.addEventListener('mouseup', updateActiveStates);
-    editor.addEventListener('selectionchange', updateActiveStates);
     
     // Toolbar listeners
     document.getElementById('boldBtn').addEventListener('click', () => execCmd('bold'));
@@ -271,22 +535,22 @@
     document.getElementById('alignCenterBtn').addEventListener('click', () => execCmd('justifyCenter'));
     document.getElementById('alignRightBtn').addEventListener('click', () => execCmd('justifyRight'));
     document.getElementById('alignJustifyBtn').addEventListener('click', () => execCmd('justifyFull'));
-    
-    const fontFamilySelect = document.getElementById('fontFamilySelect');
-    const fontSizeSelect = document.getElementById('fontSizeSelect');
-    
-    fontFamilySelect.addEventListener('change', (e) => execCmd('fontName', e.target.value));
-    fontSizeSelect.addEventListener('change', (e) => {
+    document.getElementById('unorderedListBtn').addEventListener('click', () => execCmd('insertUnorderedList'));
+    document.getElementById('orderedListBtn').addEventListener('click', () => execCmd('insertOrderedList'));
+    document.getElementById('indentBtn').addEventListener('click', () => execCmd('indent'));
+    document.getElementById('outdentBtn').addEventListener('click', () => execCmd('outdent'));
+    document.getElementById('undoBtn').addEventListener('click', () => execCmd('undo'));
+    document.getElementById('redoBtn').addEventListener('click', () => execCmd('redo'));
+    document.getElementById('fontFamilySelect').addEventListener('change', (e) => execCmd('fontName', e.target.value));
+    document.getElementById('fontSizeSelect').addEventListener('change', (e) => {
         document.execCommand('styleWithCSS', false, true);
         execCmd('fontSize', e.target.value);
     });
-    
     document.getElementById('clearFormatBtn').addEventListener('click', () => execCmd('removeFormat'));
     
-    // Local image upload
+    // Image Upload & Clipboard
     const localImageInput = document.getElementById('localImageInput');
     document.getElementById('insertLocalImageBtn').addEventListener('click', () => localImageInput.click());
-    
     localImageInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file && file.type.startsWith('image/')) {
@@ -297,20 +561,14 @@
         localImageInput.value = '';
     });
     
-    function insertImageAtCursor(src, altText = "Image") {
+    function insertImageAtCursor(src) {
         const img = document.createElement('img');
         img.src = src;
-        img.alt = altText;
         img.style.maxWidth = "100%";
-        img.style.borderRadius = "8px";
-        img.style.margin = "6px 0";
-        
+        img.style.borderRadius = "12px";
+        img.style.margin = "8px 0";
         const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) {
-            editor.appendChild(img);
-            editor.focus();
-            return;
-        }
+        if (!selection || selection.rangeCount === 0) { editor.appendChild(img); editor.focus(); return; }
         const range = selection.getRangeAt(0);
         range.deleteContents();
         range.insertNode(img);
@@ -319,52 +577,33 @@
         selection.removeAllRanges();
         selection.addRange(range);
         editor.focus();
+        renderTOC();
     }
     
-    // Insert image from clipboard
     async function pasteImageFromClipboard() {
         try {
-            if (!navigator.clipboard || !navigator.clipboard.read) {
-                updateClipboardStatus("❌ Clipboard read not supported", true);
-                return;
-            }
-            const clipboardItems = await navigator.clipboard.read();
-            for (const item of clipboardItems) {
-                const imageTypes = item.types.filter(type => type.startsWith('image/'));
-                if (imageTypes.length > 0) {
-                    const blob = await item.getType(imageTypes[0]);
+            if (!navigator.clipboard?.read) { updateStatus("Clipboard read not supported", true); return; }
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+                const imgTypes = item.types.filter(t => t.startsWith('image/'));
+                if (imgTypes.length) {
+                    const blob = await item.getType(imgTypes[0]);
                     const reader = new FileReader();
-                    reader.onload = (e) => {
-                        insertImageAtCursor(e.target.result, "Clipboard Image");
-                        updateClipboardStatus("✅ Image inserted!", false);
-                        setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-                    };
+                    reader.onload = (e) => { insertImageAtCursor(e.target.result); updateStatus("Image inserted", false); };
                     reader.readAsDataURL(blob);
                     return;
                 }
             }
-            updateClipboardStatus("⚠️ No image found in clipboard", true);
-            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-        } catch (err) {
-            console.error("Clipboard error:", err);
-            updateClipboardStatus("❌ Access denied or error", true);
-            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-        }
+            updateStatus("No image in clipboard", true);
+        } catch(err) { updateStatus("Access denied", true); }
     }
-    
-    function updateClipboardStatus(msg, isError) {
-        const statusDiv = document.getElementById('clipboardStatus');
-        statusDiv.innerHTML = `<i class="fas ${isError ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i> ${msg}`;
-        statusDiv.style.background = isError ? "#fee2e2" : "#e6f7e6";
-        setTimeout(() => {
-            if (statusDiv.innerHTML.includes(msg)) {
-                statusDiv.style.background = "#eef2ff";
-                statusDiv.innerHTML = "📋 Ready";
-            }
-        }, 2000);
-    }
-    
     document.getElementById('insertImageClipboardBtn').addEventListener('click', pasteImageFromClipboard);
+    
+    function updateStatus(msg, isErr) {
+        const sb = document.getElementById('clipboardStatus');
+        sb.innerHTML = `<i class="fas ${isErr ? 'fa-exclamation-triangle' : 'fa-check'}"></i> ${msg}`;
+        setTimeout(() => { if (sb.innerHTML.includes(msg)) sb.innerHTML = '<i class="fas fa-check-circle"></i> Ready'; }, 2000);
+    }
     
     // Keyboard shortcuts
     editor.addEventListener('keydown', (e) => {
@@ -372,199 +611,99 @@
             if (e.key === 'b') { e.preventDefault(); execCmd('bold'); }
             else if (e.key === 'i') { e.preventDefault(); execCmd('italic'); }
             else if (e.key === 'u') { e.preventDefault(); execCmd('underline'); }
+            else if (e.key === 'z') { e.preventDefault(); execCmd('undo'); }
+            else if (e.key === 'y') { e.preventDefault(); execCmd('redo'); }
+            else if (e.shiftKey && e.key === '7') { e.preventDefault(); execCmd('insertOrderedList'); }
+            else if (e.shiftKey && e.key === '8') { e.preventDefault(); execCmd('insertUnorderedList'); }
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (e.shiftKey) execCmd('outdent');
+            else execCmd('indent');
         }
     });
     
-    // EXPORT TO DOCX using docx 9.7.1
+    // ---------- EXPORT TO DOCX (keeping previous robust logic) ----------
     document.getElementById('exportDocxBtn').addEventListener('click', async () => {
-        const exportBtn = document.getElementById('exportDocxBtn');
-        const originalText = exportBtn.innerHTML;
-        
+        const btn = document.getElementById('exportDocxBtn');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Generating...';
+        btn.disabled = true;
         try {
-            exportBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Generating...';
-            exportBtn.disabled = true;
-            
-            // Check if docx library loaded properly
-            if (!docx || typeof docx.Document === 'undefined') {
-                throw new Error('DOCX library not loaded properly. Please refresh the page.');
-            }
-            
-            // Destructure needed components from docx
-            const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType } = docx;
-            
-            // Helper to get alignment from element
-            function getAlignment(element) {
-                const textAlign = window.getComputedStyle(element).textAlign;
-                if (textAlign === 'center') return AlignmentType.CENTER;
-                if (textAlign === 'right') return AlignmentType.RIGHT;
-                if (textAlign === 'justify') return AlignmentType.JUSTIFIED;
+            const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, UnderlineType, HeadingLevel } = docx;
+            function getAlignment(el) {
+                const ta = window.getComputedStyle(el).textAlign;
+                if (ta === 'center') return AlignmentType.CENTER;
+                if (ta === 'right') return AlignmentType.RIGHT;
+                if (ta === 'justify') return AlignmentType.JUSTIFIED;
                 return AlignmentType.LEFT;
             }
-            
-            // Helper to get font styling from element
-            function getRunProperties(element) {
+            function getRunProps(el) {
                 const props = {};
-                if (!element) return props;
-                const fontWeight = window.getComputedStyle(element).fontWeight;
-                const fontStyle = window.getComputedStyle(element).fontStyle;
-                const textDecoration = window.getComputedStyle(element).textDecoration;
-                if (fontWeight === '700' || fontWeight === 'bold' || fontWeight === 'bolder') props.bold = true;
-                if (fontStyle === 'italic') props.italics = true;
-                if (textDecoration.includes('underline')) props.underline = { type: UnderlineType.SINGLE };
+                if (!el) return props;
+                const cs = window.getComputedStyle(el);
+                if (cs.fontWeight === '700' || cs.fontWeight === 'bold') props.bold = true;
+                if (cs.fontStyle === 'italic') props.italics = true;
+                if (cs.textDecoration.includes('underline')) props.underline = { type: UnderlineType.SINGLE };
                 return props;
             }
-            
-            // Convert base64 to Uint8Array
-            function base64ToUint8Array(base64) {
-                const binaryString = atob(base64);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
-                }
-                return bytes;
+            function base64ToUint8(base64) {
+                const bin = atob(base64.split(',')[1]);
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                return arr;
             }
-            
-            // Recursively process nodes and build paragraphs
-            async function processNode(node, currentAlignment = AlignmentType.LEFT) {
-                const elements = [];
-                
-                // Text node
+            async function processNode(node, align = AlignmentType.LEFT) {
                 if (node.nodeType === Node.TEXT_NODE) {
                     const text = node.textContent;
-                    if (text && text.trim() !== '') {
-                        const parent = node.parentElement;
-                        const runProps = getRunProperties(parent);
-                        // Handle multiple lines within text node
-                        const lines = text.split('\n');
-                        for (let i = 0; i < lines.length; i++) {
-                            if (lines[i] || i > 0) {
-                                elements.push(new TextRun({ text: lines[i] || ' ', ...runProps }));
-                                if (i < lines.length - 1) {
-                                    elements.push(new TextRun({ text: '\n', break: 1 }));
-                                }
-                            }
-                        }
-                    }
-                    return elements;
+                    if (text && text.trim()) return [new TextRun({ text, ...getRunProps(node.parentElement) })];
+                    return [];
                 }
-                
-                // Element node
                 if (node.nodeType === Node.ELEMENT_NODE) {
-                    const tagName = node.tagName.toLowerCase();
-                    
-                    // Handle images
-                    if (tagName === 'img') {
+                    const tag = node.tagName.toLowerCase();
+                    if (tag === 'img') {
                         try {
-                            const src = node.src;
-                            if (src) {
-                                let imageBuffer;
-                                if (src.startsWith('data:')) {
-                                    // Extract base64 data (remove data:image/...;base64, prefix)
-                                    const base64Data = src.split(',')[1];
-                                    imageBuffer = base64ToUint8Array(base64Data);
-                                } else {
-                                    // Fetch external image
-                                    const response = await fetch(src);
-                                    const blob = await response.blob();
-                                    const arrayBuffer = await blob.arrayBuffer();
-                                    imageBuffer = new Uint8Array(arrayBuffer);
-                                }
-                                
-                                const imageRun = new ImageRun({
-                                    data: imageBuffer,
-                                    transformation: { width: 400, height: 300 },
-                                    altText: { title: node.alt || 'Image', description: 'Embedded image' }
-                                });
-                                return [imageRun];
-                            }
-                        } catch (err) {
-                            console.warn('Image processing error:', err);
-                            return [new TextRun({ text: '[Image failed to load]' })];
-                        }
-                        return [];
+                            let data; 
+                            if (node.src.startsWith('data:')) data = base64ToUint8(node.src);
+                            else { const res = await fetch(node.src); const blob = await res.blob(); data = new Uint8Array(await blob.arrayBuffer()); }
+                            return [new ImageRun({ data, transformation: { width: 400, height: 300 } })];
+                        } catch(e) { return [new TextRun("[Image]")]; }
                     }
-                    
-                    // Handle line break
-                    if (tagName === 'br') {
-                        return [new TextRun({ text: '\n', break: 1 })];
+                    if (tag === 'br') return [new TextRun({ text: "\n", break: 1 })];
+                    let childRuns = [];
+                    for (let child of node.childNodes) childRuns.push(...await processNode(child, getAlignment(node)));
+                    const block = ['p','div','h1','h2','h3','h4','ul','ol','li'];
+                    if (block.includes(tag)) {
+                        let heading = null;
+                        if (tag === 'h1') heading = HeadingLevel.HEADING_1;
+                        else if (tag === 'h2') heading = HeadingLevel.HEADING_2;
+                        else if (tag === 'h3') heading = HeadingLevel.HEADING_3;
+                        else if (tag === 'h4') heading = HeadingLevel.HEADING_4;
+                        if (heading) return [new Paragraph({ children: childRuns.length?childRuns:[new TextRun("")], heading, alignment: align })];
+                        if (!childRuns.length) childRuns = [new TextRun("")];
+                        return [new Paragraph({ children: childRuns, alignment: align })];
                     }
-                    
-                    // Process children
-                    const childElements = [];
-                    const align = getAlignment(node);
-                    
-                    for (let child of node.childNodes) {
-                        const childResult = await processNode(child, align);
-                        childElements.push(...childResult);
-                    }
-                    
-                    // If this is a block element, wrap children in a paragraph
-                    const blockTags = ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'section', 'article'];
-                    if (blockTags.includes(tagName)) {
-                        if (childElements.length === 0) {
-                            // Empty paragraph - add a space to preserve structure
-                            return [new Paragraph({ children: [new TextRun('')], alignment: align })];
-                        }
-                        return [new Paragraph({ children: childElements, alignment: align })];
-                    }
-                    
-                    // Inline elements - just return the child elements
-                    return childElements;
+                    return childRuns;
                 }
-                
                 return [];
             }
-            
-            // Process all top-level nodes in the editor
-            const allParagraphs = [];
+            let allParas = [];
             for (let child of editor.childNodes) {
-                const result = await processNode(child, AlignmentType.LEFT);
-                if (Array.isArray(result)) {
-                    for (const item of result) {
-                        if (item instanceof Paragraph) {
-                            allParagraphs.push(item);
-                        } else if (item instanceof TextRun) {
-                            allParagraphs.push(new Paragraph({ children: [item], alignment: AlignmentType.LEFT }));
-                        }
-                    }
-                }
+                const res = await processNode(child);
+                for (let item of res) if (item instanceof Paragraph) allParas.push(item);
+                else if (item instanceof TextRun) allParas.push(new Paragraph({ children: [item] }));
             }
-            
-            // If no content, add a default paragraph
-            if (allParagraphs.length === 0) {
-                allParagraphs.push(new Paragraph({ children: [new TextRun('Empty document')] }));
-            }
-            
-            // Create the document
-            const doc = new Document({
-                sections: [{
-                    properties: {},
-                    children: allParagraphs
-                }]
-            });
-            
-            // Generate and save blob
+            if (!allParas.length) allParas.push(new Paragraph({ children: [new TextRun("Empty")] }));
+            const doc = new Document({ sections: [{ properties: {}, children: allParas }] });
             const blob = await Packer.toBlob(doc);
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-            saveAs(blob, `WordPad_${timestamp}.docx`);
-            
-            updateClipboardStatus("✅ DOCX exported successfully with images!", false);
-            setTimeout(() => updateClipboardStatus("📋 Ready", false), 2000);
-            
-        } catch (error) {
-            console.error('Export error:', error);
-            alert('Export failed: ' + error.message);
-            updateClipboardStatus("❌ Export failed: " + error.message, true);
-        } finally {
-            exportBtn.innerHTML = originalText;
-            exportBtn.disabled = false;
-        }
+            saveAs(blob, `WordPad_${Date.now()}.docx`);
+            updateStatus("DOCX ready", false);
+        } catch(e) { alert("Export error: "+e.message); updateStatus("Export failed", true); }
+        finally { btn.innerHTML = orig; btn.disabled = false; }
     });
     
-    // Initialize active states
+    renderTOC();
     updateActiveStates();
-    
-    console.log("WordPad ready - using docx 9.7.1 with full image support");
 </script>
 </body>
 </html>
