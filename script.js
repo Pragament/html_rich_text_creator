@@ -284,11 +284,14 @@ function renderTOC() {
         if (node.images.length) {
             node.images.forEach((image) => {
                 if (!image.src) return;
-                const srcSpan = document.createElement('span');
-                srcSpan.className = 'toc-image-src';
-                srcSpan.innerText = getImageSrcLabel(image.src, image.index);
-                srcSpan.title = image.src.startsWith('data:') ? 'Embedded image data URL' : image.src;
-                srcSpan.addEventListener('click', (e) => {
+                const imageWrapper = document.createElement('span');
+                imageWrapper.className = 'toc-image-src';
+                const preview = document.createElement('img');
+                preview.className = 'toc-image-preview';
+                preview.src = image.src;
+                preview.alt = image.alt || `Image ${image.index + 1}`;
+                preview.title = image.src.startsWith('data:') ? 'Embedded image preview' : image.src;
+                preview.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const targetElem = document.getElementById(node.id);
                     if (targetElem) {
@@ -296,7 +299,8 @@ function renderTOC() {
                         editor.focus();
                     }
                 });
-                wrapper.appendChild(srcSpan);
+                imageWrapper.appendChild(preview);
+                wrapper.appendChild(imageWrapper);
             });
         }
         if (hasChildren) {
