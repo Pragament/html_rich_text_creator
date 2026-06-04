@@ -605,6 +605,94 @@ localImageInput.addEventListener('change', (e) => {
     localImageInput.value = '';
 });
 
+// Bulk DOCX import: UI and logic
+const importDocxBtn = document.getElementById('importDocxBtn');
+const importDocxInput = document.getElementById('importDocxInput');
+const importModal = document.getElementById('importModal');
+const importModalClose = document.getElementById('importModalClose');
+const importMergeBtn = document.getElementById('importMergeBtn');
+const importCancelBtn = document.getElementById('importCancelBtn');
+const importFileList = document.getElementById('importFileList');
+
+let importFiles = [];
+
+function openImportModal() {
+    importModal.setAttribute('aria-hidden', 'false');
+    importFileList.innerHTML = '';
+}
+function closeImportModal() {
+    importModal.setAttribute('aria-hidden', 'true');
+}
+
+importDocxBtn?.addEventListener('click', () => importDocxInput.click());
+importDocxInput?.addEventListener('change', (e) => {
+    importFiles = Array.from(e.target.files || []);
+    if (!importFiles.length) return;
+    renderImportList();
+    openImportModal();
+});
+
+function renderImportList() {
+    importFileList.innerHTML = '';
+    importFiles.forEach((file, idx) => {
+        const li = document.createElement('li');
+        li.className = 'import-file-item';
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.textContent = file.name;
+        const controls = document.createElement('div');
+        controls.className = 'controls';
+
+        const upBtn = document.createElement('button'); upBtn.type = 'button'; upBtn.textContent = '↑';
+        const downBtn = document.createElement('button'); downBtn.type = 'button'; downBtn.textContent = '↓';
+        const removeBtn = document.createElement('button'); removeBtn.type = 'button'; removeBtn.textContent = 'Remove';
+
+        upBtn.addEventListener('click', () => { if (idx > 0) { [importFiles[idx-1], importFiles[idx]] = [importFiles[idx], importFiles[idx-1]]; renderImportList(); } });
+        downBtn.addEventListener('click', () => { if (idx < importFiles.length - 1) { [importFiles[idx+1], importFiles[idx]] = [importFiles[idx], importFiles[idx+1]]; renderImportList(); } });
+        removeBtn.addEventListener('click', () => { importFiles.splice(idx,1); renderImportList(); });
+
+        controls.appendChild(upBtn); controls.appendChild(downBtn); controls.appendChild(removeBtn);
+        li.appendChild(label); li.appendChild(controls);
+        importFileList.appendChild(li);
+    });
+}
+
+importModalClose?.addEventListener('click', closeImportModal);
+importCancelBtn?.addEventListener('click', () => { importFiles = []; importDocxInput.value = ''; closeImportModal(); });
+
+async function convertDocxToHtml(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    if (typeof mammoth === 'undefined' || !mammoth.convertToHtml) {
+        throw new Error('mammoth.js not available');
+    }
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    return result.value || '';
+}
+
+importMergeBtn?.addEventListener('click', async () => {
+    if (!importFiles.length) { updateStatus('No files to import', true); return; }
+    importMergeBtn.disabled = true; importMergeBtn.textContent = 'Merging...';
+    try {
+        for (let i = 0; i < importFiles.length; i++) {
+            const file = importFiles[i];
+            try {
+                const html = await convertDocxToHtml(file);
+                // Insert with a separator comment to keep content separated
+                editor.insertAdjacentHTML('beforeend', `<div class="import-sep" style="margin:12px 0; border-top:1px dashed #e2e8f0;"></div>` + html);
+            } catch(err) {
+                updateStatus(`Failed to convert ${file.name}`, true);
+            }
+        }
+        renderTOC();
+        updateStatus('Files imported', false);
+        importFiles = [];
+        importDocxInput.value = '';
+        closeImportModal();
+    } finally {
+        importMergeBtn.disabled = false; importMergeBtn.textContent = 'Merge & Load';
+    }
+});
+
 function insertImageAtCursor(src) {
     const img = document.createElement('img');
     img.style.maxWidth = '100%';

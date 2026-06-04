@@ -14,6 +14,8 @@
             }
         }
     </script>
+    <!-- mammoth for client-side DOCX -> HTML conversion -->
+    <script src="https://unpkg.com/mammoth@1.4.14/mammoth.browser.min.js"></script>
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
@@ -73,6 +75,10 @@
                     <option value="lesson-plan">Lesson Plan</option>
                     <option value="blank">Blank Document</option>
                 </select>
+            </div>
+            <div class="tool-group">
+                <button class="tool-btn" id="importDocxBtn" title="Import DOCX files"><i class="fas fa-file-import"></i></button>
+                <input type="file" id="importDocxInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style="display:none">
             </div>
             <!-- Headings Dropdown (LIVE updates based on selection) -->
             <div class="tool-group">
@@ -163,6 +169,23 @@
             <li>TOC auto-generates from headings `h1`–`h4`.</li>
             <li>TOC shows hierarchical numbering and previews for images/tables.</li>
         </ul>
+    </div>
+</div>
+<!-- Import modal for ordering and merging DOCX files -->
+<div class="import-modal" id="importModal" aria-hidden="true">
+    <div class="import-modal-inner">
+        <div class="import-modal-header">
+            <strong>Import DOCX Files</strong>
+            <button id="importModalClose" class="icon-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="import-modal-body">
+            <p>Select multiple DOCX files; reorder before merging into the editor.</p>
+            <ul id="importFileList" class="import-file-list"></ul>
+        </div>
+        <div class="import-modal-actions">
+            <button id="importMergeBtn" class="tool-btn">Merge & Load</button>
+            <button id="importCancelBtn" class="tool-btn">Cancel</button>
+        </div>
     </div>
 </div>
 

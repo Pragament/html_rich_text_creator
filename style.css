@@ -78,6 +78,27 @@ body {
 .cheatsheet ul { margin: 6px 0 8px 16px; padding: 0; }
 .cheatsheet li { margin: 4px 0; }
 
+/* Import modal styles */
+.import-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2,6,23,0.35);
+    z-index: 1600;
+}
+.import-modal[aria-hidden="false"] { display:flex; }
+.import-modal-inner { background:#fff; width:720px; max-width:94vw; border-radius:10px; box-shadow:0 12px 40px rgba(2,6,23,0.2); overflow:hidden; }
+.import-modal-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid #eef2f7; }
+.import-modal-body { padding:12px 16px; max-height:50vh; overflow:auto; }
+.import-modal-actions { display:flex; gap:8px; padding:12px 16px; border-top:1px solid #eef2f7; justify-content:flex-end; }
+.import-file-list { list-style:none; padding:0; margin:8px 0; }
+.import-file-item { display:flex; align-items:center; justify-content:space-between; padding:8px; border:1px solid #eef2f7; border-radius:6px; margin-bottom:8px; background:#fafafa; }
+.import-file-item .label { flex:1; margin-right:8px; word-break:break-all; }
+.import-file-item .controls { display:flex; gap:6px; }
+.import-file-item .controls button { padding:6px 8px; font-size:0.9rem; }
+
 .toc-header {
     background: #f8fafc;
     padding: 18px 20px;
