@@ -4,6 +4,7 @@ const editor = document.getElementById('richEditor');
 const tocContainer = document.getElementById('tocContainer');
 const headingSelect = document.getElementById('headingSelect');
 const templateSelect = document.getElementById('templateSelect');
+const newFileBtn = document.getElementById('newFileBtn');
 const selectionMenu = document.getElementById('selectionMenu');
 const tableMenu = document.getElementById('tableMenu');
 const tocResizer = document.getElementById('tocResizer');
@@ -1265,6 +1266,40 @@ editor?.addEventListener('input', autoSave);
 function showDraftsModal() { draftsModal?.setAttribute('aria-hidden', 'false'); renderDraftsList(); }
 function closeDraftsModal() { draftsModal?.setAttribute('aria-hidden', 'true'); }
 draftsBtn?.addEventListener('click', (e) => { e.stopPropagation(); if (draftsModal?.getAttribute('aria-hidden') === 'false') closeDraftsModal(); else showDraftsModal(); });
+
+function createNewDocument() {
+    const docName = prompt("Enter a name for the new document:", "New Document");
+    if (docName === null) return;
+    const finalName = docName.trim() || "Untitled Document";
+    const drafts = getDrafts();
+    let checkName = finalName;
+    let suffix = 1;
+    while (drafts.some(d => d.name === checkName)) {
+        checkName = `${finalName} (${suffix++})`;
+    }
+    const newDraft = {
+        name: checkName,
+        html: `<h1>${checkName}</h1><p><br></p>`,
+        timestamp: Date.now()
+    };
+    drafts.push(newDraft);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
+    editor.innerHTML = newDraft.html;
+    renderTOC();
+    enhanceImages();
+    enhanceTables();
+    if (draftsModal && draftsModal.getAttribute('aria-hidden') === 'false') {
+        renderDraftsList();
+    }
+    updateStatus(`Created document: ${checkName}`, false);
+}
+newFileBtn?.addEventListener('click', createNewDocument);
+document.addEventListener('keydown', (e) => {
+    if (e.altKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        createNewDocument();
+    }
+});
 draftsModalClose?.addEventListener('click', closeDraftsModal);
 function renderDraftsList() { let drafts = getDrafts(); const searchTerm = (draftsSearch?.value || '').toLowerCase(); const sortBy = draftsSortBy?.value || 'recent'; if (searchTerm) drafts = drafts.filter(d => d.name.toLowerCase().includes(searchTerm)); if (sortBy === 'recent') drafts.sort((a, b) => b.timestamp - a.timestamp); else if (sortBy === 'oldest') drafts.sort((a, b) => a.timestamp - b.timestamp); else if (sortBy === 'name-asc') drafts.sort((a, b) => a.name.localeCompare(b.name)); else if (sortBy === 'name-desc') drafts.sort((a, b) => b.name.localeCompare(a.name)); draftsList.innerHTML = ''; if (!drafts.length) { draftsList.innerHTML = '<li style="padding:20px; text-align:center; color:#94a3b8;">No drafts saved</li>'; return; } drafts.forEach((draft) => { const li = document.createElement('li'); li.className = 'drafts-item'; const info = document.createElement('div'); info.className = 'drafts-item-info'; const nameDiv = document.createElement('div'); nameDiv.className = 'drafts-item-name'; nameDiv.textContent = draft.name; const metaDiv = document.createElement('div'); metaDiv.className = 'drafts-item-meta'; metaDiv.textContent = new Date(draft.timestamp).toLocaleString(); info.appendChild(nameDiv); info.appendChild(metaDiv); const controls = document.createElement('div'); controls.className = 'drafts-item-controls'; const loadBtn = document.createElement('button'); loadBtn.type = 'button'; loadBtn.textContent = 'Load'; loadBtn.addEventListener('click', () => { editor.innerHTML = draft.html; renderTOC(); enhanceImages(); enhanceTables(); updateStatus(`Loaded: ${draft.name}`, false); closeDraftsModal(); }); const renameBtn = document.createElement('button'); renameBtn.type = 'button'; renameBtn.textContent = 'Rename'; renameBtn.addEventListener('click', () => { const newName = prompt('New name:', draft.name); if (newName && newName.trim()) { draft.name = newName.trim(); const drafts = getDrafts(); const idx = drafts.findIndex(d => d.timestamp === draft.timestamp); if (idx >= 0) drafts[idx].name = newName.trim(); localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts)); renderDraftsList(); } }); const deleteBtn = document.createElement('button'); deleteBtn.type = 'button'; deleteBtn.textContent = 'Delete'; deleteBtn.addEventListener('click', () => { if (confirm(`Delete "${draft.name}"?`)) { let drafts = getDrafts(); drafts = drafts.filter(d => d.timestamp !== draft.timestamp); localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts)); renderDraftsList(); updateStatus('Draft deleted', false); } }); controls.appendChild(loadBtn); controls.appendChild(renameBtn); controls.appendChild(deleteBtn); li.appendChild(info); li.appendChild(controls); draftsList.appendChild(li); }); }
 draftsSearch?.addEventListener('input', renderDraftsList);
