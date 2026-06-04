@@ -618,7 +618,6 @@ let importFiles = [];
 
 function openImportModal() {
     importModal.setAttribute('aria-hidden', 'false');
-    importFileList.innerHTML = '';
 }
 function closeImportModal() {
     importModal.setAttribute('aria-hidden', 'true');
