@@ -634,11 +634,33 @@ function closeImportModal() {
 }
 
 importDocxBtn?.addEventListener('click', () => importDocxInput.click());
-importDocxInput?.addEventListener('change', (e) => {
+importDocxInput?.addEventListener('change', async (e) => {
     importFiles = Array.from(e.target.files || []);
     if (!importFiles.length) return;
-    renderImportList();
-    openImportModal();
+    // If only one file, import directly without showing the modal
+    if (importFiles.length === 1) {
+        const file = importFiles[0];
+        try {
+            const html = await convertDocxToHtml(file);
+            // Insert with separator if editor already has content
+            if (editor.innerHTML.trim()) {
+                editor.insertAdjacentHTML('beforeend', `<div class="import-sep" style="margin:12px 0; border-top:1px dashed #e2e8f0;"></div>` + html);
+            } else {
+                editor.insertAdjacentHTML('beforeend', html);
+            }
+            renderTOC();
+            updateStatus(`Imported ${file.name}`, false);
+        } catch (err) {
+            updateStatus(`Failed to convert ${file.name}`, true);
+        }
+        // Reset state
+        importFiles = [];
+        importDocxInput.value = '';
+    } else {
+        // Multiple files – show the ordering modal
+        renderImportList();
+        openImportModal();
+    }
 });
 
 function renderImportList() {
