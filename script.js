@@ -294,6 +294,12 @@ tocResizer?.addEventListener('pointerdown', startSidebarResize);
 
 headingSelect.addEventListener('change', (e) => {
     const val = e.target.value;
+    const command = 'formatBlock';
+    const value = val === 'p' ? '<p>' : `<${val}>`;
+    if (applyFormattingToTempSelected(command, value)) {
+        headingSelect.value = 'p';
+        return;
+    }
     if (val === 'p') {
         document.execCommand('formatBlock', false, '<p>');
     } else {
@@ -558,6 +564,9 @@ editor.addEventListener('keyup', updateHeadingDropdownFromSelection);
 editor.addEventListener('mouseup', updateHeadingDropdownFromSelection);
 
 function execCmd(command, value = null) {
+    if (applyFormattingToTempSelected(command, value)) {
+        return;
+    }
     document.execCommand(command, false, value);
     editor.focus();
     renderTOC();
@@ -1054,14 +1063,114 @@ function convertSelectionToTable(columns) {
     updateStatus('Text converted to table', false);
 }
 
-function showSelectionTableMenu(x, y) {
+function deselectAlternateLines() {
+    const range = restoreSavedSelection();
+    if (!range) return;
+    const fragment = range.extractContents();
+    const children = Array.from(fragment.childNodes);
+    const blockChildren = children.filter(node => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return false;
+        const tag = node.tagName.toLowerCase();
+        return ['p', 'li', 'tr', 'div', 'h1', 'h2', 'h3', 'h4'].includes(tag);
+    });
+    if (blockChildren.length > 1) {
+        blockChildren.forEach((child, index) => {
+            if (index % 2 === 0) {
+                child.classList.add('temp-selected');
+            }
+        });
+    } else {
+        const text = fragment.textContent;
+        const lines = text.split(/\r?\n/);
+        if (lines.length > 1) {
+            fragment.textContent = '';
+            lines.forEach((line, index) => {
+                if (index > 0) {
+                    fragment.appendChild(document.createElement('br'));
+                }
+                if (index % 2 === 0) {
+                    const span = document.createElement('span');
+                    span.className = 'temp-selected';
+                    span.textContent = line;
+                    fragment.appendChild(span);
+                } else {
+                    fragment.appendChild(document.createTextNode(line));
+                }
+            });
+        } else {
+            const span = document.createElement('span');
+            span.className = 'temp-selected';
+            span.appendChild(fragment);
+            fragment.appendChild(span);
+        }
+    }
+    range.insertNode(fragment);
+    window.getSelection().removeAllRanges();
+    savedSelectionRange = null;
+    editor.focus();
+    renderTOC();
+    updateStatus('Alternate lines selected for formatting', false);
+}
+
+function applyFormattingToTempSelected(command, value = null) {
+    const tempSelected = Array.from(editor.querySelectorAll('.temp-selected'));
+    if (tempSelected.length === 0) return false;
+    
+    const sel = window.getSelection();
+    
+    tempSelected.forEach(el => {
+        sel.removeAllRanges();
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        sel.addRange(r);
+        document.execCommand(command, false, value);
+    });
+    
+    sel.removeAllRanges();
+    clearTempSelectedHighlights();
+    renderTOC();
+    updateHeadingDropdownFromSelection();
+    return true;
+}
+
+function clearTempSelectedHighlights() {
+    editor.querySelectorAll('.temp-selected').forEach(el => {
+        el.classList.remove('temp-selected');
+        if (el.tagName.toLowerCase() === 'span' && !el.className) {
+            const parent = el.parentNode;
+            if (parent) {
+                while (el.firstChild) {
+                    parent.insertBefore(el.firstChild, el);
+                }
+                el.remove();
+            }
+        }
+    });
+}
+
+function showSelectionCustomMenu(x, y) {
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount || selection.isCollapsed || !editor.contains(selection.anchorNode)) return;
-    const lines = splitSelectedText(selection.toString());
-    if (!lines.length) return;
     savedSelectionRange = selection.getRangeAt(0).cloneRange();
-    const buttons = [{ label: `Convert to table (${lines.length} columns)`, action: () => convertSelectionToTable(lines.length) }];
-    if (lines.length % 2 === 0) buttons.push({ label: `Convert to table (${lines.length / 2} columns)`, action: () => convertSelectionToTable(lines.length / 2) });
+    const lines = splitSelectedText(selection.toString());
+    const buttons = [
+        {
+            label: 'Deselect Alternate Lines',
+            action: deselectAlternateLines
+        }
+    ];
+    if (lines.length > 0) {
+        buttons.push({
+            label: `Convert to table (${lines.length} columns)`,
+            action: () => convertSelectionToTable(lines.length)
+        });
+        if (lines.length % 2 === 0 && lines.length > 2) {
+            buttons.push({
+                label: `Convert to table (${lines.length / 2} columns)`,
+                action: () => convertSelectionToTable(lines.length / 2)
+            });
+        }
+    }
     showMenu(selectionMenu, x, y, buttons);
 }
 
@@ -1069,7 +1178,7 @@ editor.addEventListener('contextmenu', (e) => {
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed && editor.contains(selection.anchorNode)) {
         e.preventDefault();
-        showSelectionTableMenu(e.clientX, e.clientY);
+        showSelectionCustomMenu(e.clientX, e.clientY);
     }
 });
 
@@ -1077,12 +1186,30 @@ editor.addEventListener('touchstart', (e) => {
     clearTimeout(longPressTimer);
     longPressTimer = setTimeout(() => {
         const touch = e.touches[0];
-        if (touch) showSelectionTableMenu(touch.clientX, touch.clientY);
+        if (touch) showSelectionCustomMenu(touch.clientX, touch.clientY);
     }, 650);
 });
+
+function handleEditorMouseUp(e) {
+    setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && editor.contains(selection.anchorNode)) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            showSelectionCustomMenu(rect.left, rect.bottom + 8);
+        }
+    }, 20);
+}
+editor.addEventListener('mouseup', handleEditorMouseUp);
+editor.addEventListener('touchend', handleEditorMouseUp);
 ['touchend', 'touchmove', 'touchcancel'].forEach(eventName => editor.addEventListener(eventName, () => clearTimeout(longPressTimer)));
 document.addEventListener('click', (e) => {
-    if (!selectionMenu.contains(e.target) && !tableMenu.contains(e.target) && !e.target.closest('.table-options-btn')) hideMenus();
+    if (!selectionMenu.contains(e.target) && !tableMenu.contains(e.target) && !e.target.closest('.table-options-btn')) {
+        hideMenus();
+        if (!e.target.closest('.toolbar') && !e.target.closest('.floating-menu')) {
+            clearTempSelectedHighlights();
+        }
+    }
 });
 
 editor.addEventListener('keydown', (e) => {

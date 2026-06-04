@@ -440,3 +440,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .hidden {
     display: none !important;
 }
+
+.temp-selected {
+    background-color: rgba(30, 144, 255, 0.25) !important;
+    outline: 1px dashed rgba(30, 144, 255, 0.5);
+}
