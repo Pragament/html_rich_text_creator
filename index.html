@@ -94,6 +94,10 @@
             <div class="tool-group">
                 <button class="tool-btn" id="cheatsheetBtn" title="Cheatsheet"><i class="fas fa-keyboard"></i></button>
             </div>
+            <!-- Drafts -->
+            <div class="tool-group">
+                <button class="tool-btn" id="draftsBtn" title="Drafts & History"><i class="fas fa-history"></i></button>
+            </div>
             <!-- Fonts & Size -->
             <div class="tool-group">
                 <select id="fontFamilySelect" class="tool-select">
@@ -171,6 +175,28 @@
         </ul>
     </div>
 </div>
+<!-- Drafts history modal -->
+<div class="drafts-modal" id="draftsModal" aria-hidden="true">
+    <div class="drafts-modal-inner">
+        <div class="drafts-modal-header">
+            <strong>Drafts & History</strong>
+            <button id="draftsModalClose" class="icon-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="drafts-modal-toolbar">
+            <input type="text" id="draftsSearch" placeholder="Search drafts..." class="drafts-search">
+            <select id="draftsSortBy" class="drafts-sort">
+                <option value="recent">Recent</option>
+                <option value="oldest">Oldest</option>
+                <option value="name-asc">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+            </select>
+        </div>
+        <div class="drafts-modal-body">
+            <ul id="draftsList" class="drafts-list"></ul>
+        </div>
+    </div>
+</div>
+
 <!-- Import modal for ordering and merging DOCX files -->
 <div class="import-modal" id="importModal" aria-hidden="true">
     <div class="import-modal-inner">
