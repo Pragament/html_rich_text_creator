@@ -413,7 +413,7 @@ function renderTOC() {
         return src.length > 90 ? `${src.slice(0, 87)}...` : src;
     }
 
-    function renderNode(node) {
+    function renderNode(node, numPrefix = '') {
         const nodeKey = node.id;
         const isCollapsed = collapseState[nodeKey] === true;
         const hasChildren = node.children && node.children.length > 0;
@@ -437,7 +437,8 @@ function renderTOC() {
         }
         const titleSpan = document.createElement('span');
         titleSpan.className = `toc-title ${node.level === 1 ? 'h1' : (node.level === 2 ? 'h2' : (node.level === 3 ? 'h3' : 'h4'))}`;
-        titleSpan.innerText = node.text;
+        // Prepend numbering prefix if provided
+        titleSpan.innerText = (numPrefix ? `${numPrefix} ` : '') + node.text;
         titleSpan.style.cursor = 'pointer';
         titleSpan.addEventListener('click', () => {
             const targetElem = document.getElementById(node.id);
@@ -500,14 +501,14 @@ function renderTOC() {
         if (hasChildren) {
             const childrenDiv = document.createElement('div');
             childrenDiv.className = `children-container ${isCollapsed ? 'collapsed' : ''}`;
-            node.children.forEach(child => childrenDiv.appendChild(renderNode(child)));
+            node.children.forEach((child, idx) => childrenDiv.appendChild(renderNode(child, numPrefix ? `${numPrefix}.${idx+1}` : `${idx+1}`)));
             wrapper.appendChild(childrenDiv);
         }
         return wrapper;
     }
 
     const container = document.createElement('div');
-    tree.forEach(rootNode => container.appendChild(renderNode(rootNode)));
+    tree.forEach((rootNode, i) => container.appendChild(renderNode(rootNode, `${i+1}`)));
     tocContainer.innerHTML = '';
     tocContainer.appendChild(container);
 }
