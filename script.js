@@ -790,6 +790,61 @@ function getTableCells(table) {
     return Array.from(table.querySelectorAll('td, th')).map(cell => cell.innerHTML.trim() || '<br>');
 }
 
+function getTableDimensions(table) {
+    const rows = table.rows.length;
+    const cols = table.rows[0] ? table.rows[0].cells.length : 0;
+    return { rows, cols };
+}
+
+function getCurrentTableCell() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    let node = sel.anchorNode;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+    return node ? node.closest('td,th') : null;
+}
+
+function addTableRow(table, atIndex) {
+    const { cols } = getTableDimensions(table);
+    const tr = document.createElement('tr');
+    for (let i = 0; i < cols; i++) tr.appendChild(makeCell(''));
+    if (typeof atIndex === 'number' && atIndex < table.rows.length) table.rows[atIndex].parentNode.insertBefore(tr, table.rows[atIndex]);
+    else table.appendChild(tr);
+    renderTOC();
+    updateStatus('Row added', false);
+}
+
+function deleteTableRow(table, atIndex) {
+    if (table.rows.length <= 1) { updateStatus('Cannot delete the last row', true); return; }
+    if (typeof atIndex !== 'number' || atIndex >= table.rows.length) table.deleteRow(table.rows.length - 1);
+    else table.deleteRow(atIndex);
+    renderTOC();
+    updateStatus('Row deleted', false);
+}
+
+function addTableColumn(table, atIndex) {
+    const { rows, cols } = getTableDimensions(table);
+    for (let r = 0; r < rows; r++) {
+        const cell = makeCell('');
+        if (typeof atIndex === 'number' && atIndex < cols) table.rows[r].insertBefore(cell, table.rows[r].cells[atIndex]);
+        else table.rows[r].appendChild(cell);
+    }
+    renderTOC();
+    updateStatus('Column added', false);
+}
+
+function deleteTableColumn(table, atIndex) {
+    const { cols } = getTableDimensions(table);
+    if (cols <= 1) { updateStatus('Cannot delete the last column', true); return; }
+    for (let r = 0; r < table.rows.length; r++) {
+        const row = table.rows[r];
+        if (typeof atIndex !== 'number' || atIndex >= row.cells.length) row.removeChild(row.cells[row.cells.length - 1]);
+        else row.removeChild(row.cells[atIndex]);
+    }
+    renderTOC();
+    updateStatus('Column deleted', false);
+}
+
 function replaceTable(table, columns) {
     const cells = getTableCells(table);
     const wrapper = table.closest('.table-wrapper');
@@ -806,12 +861,38 @@ function attachTableButton(button, table) {
     button.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const cellCount = table.querySelectorAll('td, th').length;
-        const buttons = [
-            { label: 'Convert to single column', action: () => replaceTable(table, 1) },
-            { label: 'Convert to single row', action: () => replaceTable(table, cellCount) },
-        ];
-        if (cellCount % 2 === 0) buttons.push({ label: `Convert to ${cellCount / 2} columns`, action: () => replaceTable(table, cellCount / 2) });
+        const dims = getTableDimensions(table);
+        const totalCells = Array.from(table.querySelectorAll('td, th')).length;
+        const currentCell = getCurrentTableCell();
+        const currentRowIndex = currentCell ? currentCell.parentElement.rowIndex : null;
+        const currentCellIndex = currentCell ? Array.from(currentCell.parentElement.cells).indexOf(currentCell) : null;
+
+        const buttons = [];
+        // Conversion options (only show when meaningful)
+        if (dims.cols > 1) buttons.push({ label: 'Convert to single column', action: () => replaceTable(table, 1) });
+        if (dims.rows > 1) buttons.push({ label: 'Convert to single row', action: () => replaceTable(table, totalCells) });
+        if (totalCells % 2 === 0 && totalCells > 2) buttons.push({ label: `Convert to ${totalCells / 2} columns`, action: () => replaceTable(table, totalCells / 2) });
+
+        // Row operations (context-aware)
+        if (currentRowIndex !== null) {
+            buttons.push({ label: 'Add row above', action: () => addTableRow(table, currentRowIndex) });
+            buttons.push({ label: 'Add row below', action: () => addTableRow(table, currentRowIndex + 1) });
+            if (dims.rows > 1) buttons.push({ label: 'Delete this row', action: () => deleteTableRow(table, currentRowIndex) });
+        } else {
+            buttons.push({ label: 'Add row (end)', action: () => addTableRow(table) });
+            if (dims.rows > 1) buttons.push({ label: 'Delete last row', action: () => deleteTableRow(table, dims.rows - 1) });
+        }
+
+        // Column operations (context-aware)
+        if (currentCellIndex !== null) {
+            buttons.push({ label: 'Add column left', action: () => addTableColumn(table, currentCellIndex) });
+            buttons.push({ label: 'Add column right', action: () => addTableColumn(table, currentCellIndex + 1) });
+            if (dims.cols > 1) buttons.push({ label: 'Delete this column', action: () => deleteTableColumn(table, currentCellIndex) });
+        } else {
+            buttons.push({ label: 'Add column (end)', action: () => addTableColumn(table) });
+            if (dims.cols > 1) buttons.push({ label: 'Delete last column', action: () => deleteTableColumn(table, dims.cols - 1) });
+        }
+
         showMenu(tableMenu, e.clientX, e.clientY, buttons);
     });
 }
