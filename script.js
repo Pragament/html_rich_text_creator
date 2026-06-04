@@ -44,26 +44,42 @@ const documentTemplates = {
         html: `
             <h1>Subject1</h1>
             <h2>Question1</h2>
-            <h3>optionA</h3>
-            <h3>optionB</h3>
-            <h3>optionC</h3>
-            <h3>optionD</h3>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
             <h2>Question2</h2>
-            <h3>optionA</h3>
-            <h3>optionB</h3>
-            <h3>optionC</h3>
-            <h3>optionD</h3>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
             <h1>Subject2</h1>
             <h2>Question1</h2>
-            <h3>optionA</h3>
-            <h3>optionB</h3>
-            <h3>optionC</h3>
-            <h3>optionD</h3>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
             <h2>Question2</h2>
-            <h3>optionA</h3>
-            <h3>optionB</h3>
-            <h3>optionC</h3>
-            <h3>optionD</h3>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
         `
     },
     'answer-key': {
@@ -343,7 +359,7 @@ function renderTOC() {
         if (node.tables && node.tables.length) {
             node.tables.forEach((table) => {
                 const tableHeader = document.createElement('div');
-                tableHeader.className = 'toc-table-label';
+                tableHeader.className = 'toc-table-label hidden';
                 tableHeader.innerText = `Table ${table.index + 1}: ${table.rowCount}×${table.colCount}`;
                 wrapper.appendChild(tableHeader);
 

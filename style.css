@@ -342,3 +342,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     .toc-sidebar { width: 260px; }
     .tool-btn { width: 32px; height: 32px; font-size: 1rem; }
 }
+
+.hidden {
+    display: none !important;
+}
