@@ -195,6 +195,25 @@ function serializeImages(images) {
     });
 }
 
+function serializeTables(tables) {
+    return tables.map((table, tableIndex) => {
+        const rows = table.rows.length;
+        const cols = table.rows[0] ? table.rows[0].cells.length : 0;
+        const data = Array.from(table.rows).map((row) => {
+            return Array.from(row.cells).map((cell) => ({
+                html: cell.innerHTML.trim(),
+                isHeader: cell.tagName.toLowerCase() === 'th',
+            }));
+        });
+        return {
+            index: tableIndex,
+            rowCount: rows,
+            colCount: cols,
+            data,
+        };
+    });
+}
+
 function getHeadingImages(heading) {
     const images = [...heading.querySelectorAll('img')];
     let node = heading.nextElementSibling;
@@ -203,6 +222,17 @@ function getHeadingImages(heading) {
         node = node.nextElementSibling;
     }
     return serializeImages(images);
+}
+
+function getHeadingTables(heading) {
+    const tables = [...heading.querySelectorAll('table')];
+    let node = heading.nextElementSibling;
+    while (node && !/^H[1-4]$/.test(node.tagName)) {
+        if (node.tagName.toLowerCase() === 'table') tables.push(node);
+        tables.push(...node.querySelectorAll('table'));
+        node = node.nextElementSibling;
+    }
+    return serializeTables(tables);
 }
 
 function buildTOCNodes() {
@@ -218,7 +248,14 @@ function buildTOCNodes() {
         else if (tag === 'h4') level = 4;
         const text = heading.innerText.trim() || `Heading ${idx+1}`;
         if (!heading.id) heading.id = `heading-${Date.now()}-${idx}-${Math.random()}`;
-        const node = { id: heading.id, text, level, images: getHeadingImages(heading), children: [] };
+        const node = {
+            id: heading.id,
+            text,
+            level,
+            images: getHeadingImages(heading),
+            tables: getHeadingTables(heading),
+            children: [],
+        };
         while (stack.length > 1 && stack[stack.length-1].level >= level) stack.pop();
         const parent = stack[stack.length-1];
         parent.children.push(node);
@@ -301,6 +338,32 @@ function renderTOC() {
                 });
                 imageWrapper.appendChild(preview);
                 wrapper.appendChild(imageWrapper);
+            });
+        }
+        if (node.tables && node.tables.length) {
+            node.tables.forEach((table) => {
+                const tableHeader = document.createElement('div');
+                tableHeader.className = 'toc-table-label';
+                tableHeader.innerText = `Table ${table.index + 1}: ${table.rowCount}×${table.colCount}`;
+                wrapper.appendChild(tableHeader);
+
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'toc-table-container';
+                const preview = document.createElement('table');
+                preview.className = 'toc-table-preview';
+
+                table.data.forEach((rowData) => {
+                    const tr = document.createElement('tr');
+                    rowData.forEach((cellData) => {
+                        const cell = document.createElement(cellData.isHeader ? 'th' : 'td');
+                        cell.innerHTML = cellData.html || '&nbsp;';
+                        tr.appendChild(cell);
+                    });
+                    preview.appendChild(tr);
+                });
+
+                tableContainer.appendChild(preview);
+                wrapper.appendChild(tableContainer);
             });
         }
         if (hasChildren) {
