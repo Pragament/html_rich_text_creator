@@ -56,6 +56,28 @@ body {
     background: #64748b;
 }
 
+/* Cheatsheet floating panel */
+.cheatsheet {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 320px;
+    max-width: calc(100vw - 48px);
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(2,6,23,0.15);
+    padding: 12px;
+    z-index: 1400;
+    font-size: 0.9rem;
+    display: none;
+}
+.cheatsheet[aria-hidden="false"] { display: block; }
+.cheatsheet-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.cheatsheet .icon-btn { background:transparent; border:none; cursor:pointer; color:#64748b; }
+.cheatsheet h4 { margin: 8px 0 4px; font-size: 0.95rem; }
+.cheatsheet ul { margin: 6px 0 8px 16px; padding: 0; }
+.cheatsheet li { margin: 4px 0; }
+
 .toc-header {
     background: #f8fafc;
     padding: 18px 20px;

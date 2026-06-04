@@ -652,6 +652,31 @@ async function pasteImageFromClipboard() {
 }
 document.getElementById('insertImageClipboardBtn').addEventListener('click', pasteImageFromClipboard);
 
+// Cheatsheet UI
+const cheatsheetBtn = document.getElementById('cheatsheetBtn');
+const cheatsheet = document.getElementById('cheatsheet');
+const cheatsheetClose = document.getElementById('cheatsheetClose');
+function showCheatsheet() {
+    if (!cheatsheet) return;
+    cheatsheet.setAttribute('aria-hidden', 'false');
+}
+function hideCheatsheet() {
+    if (!cheatsheet) return;
+    cheatsheet.setAttribute('aria-hidden', 'true');
+}
+cheatsheetBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (cheatsheet && cheatsheet.getAttribute('aria-hidden') === 'false') hideCheatsheet(); else showCheatsheet();
+});
+cheatsheetClose?.addEventListener('click', (e) => { e.stopPropagation(); hideCheatsheet(); });
+document.addEventListener('click', (e) => {
+    if (!cheatsheet) return;
+    if (cheatsheet.getAttribute('aria-hidden') === 'true') return;
+    if (e.target === cheatsheet || cheatsheet.contains(e.target) || e.target === cheatsheetBtn) return;
+    hideCheatsheet();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCheatsheet(); });
+
 function updateStatus(msg, isErr) {
     const sb = document.getElementById('clipboardStatus');
     sb.innerHTML = `<i class="fas ${isErr ? 'fa-exclamation-triangle' : 'fa-check'}"></i> ${msg}`;

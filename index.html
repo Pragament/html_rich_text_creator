@@ -84,6 +84,10 @@
                     <option value="H4">Heading 4 (H4)</option>
                 </select>
             </div>
+            <!-- Cheatsheet -->
+            <div class="tool-group">
+                <button class="tool-btn" id="cheatsheetBtn" title="Cheatsheet"><i class="fas fa-keyboard"></i></button>
+            </div>
             <!-- Fonts & Size -->
             <div class="tool-group">
                 <select id="fontFamilySelect" class="tool-select">
@@ -134,6 +138,33 @@
 </div>
 <div class="floating-menu" id="selectionMenu"></div>
 <div class="floating-menu" id="tableMenu"></div>
+<div class="cheatsheet" id="cheatsheet" aria-hidden="true">
+    <div class="cheatsheet-header">
+        <strong>Cheatsheet</strong>
+        <button id="cheatsheetClose" title="Close" class="icon-btn"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="cheatsheet-body">
+        <h4>Shortcuts</h4>
+        <ul>
+            <li><strong>Bold:</strong> Cmd/Ctrl+B</li>
+            <li><strong>Italic:</strong> Cmd/Ctrl+I</li>
+            <li><strong>Underline:</strong> Cmd/Ctrl+U</li>
+            <li><strong>Undo/Redo:</strong> Cmd/Ctrl+Z / Cmd/Ctrl+Y</li>
+            <li><strong>Lists:</strong> Cmd/Ctrl+Shift+7 / Cmd/Ctrl+Shift+8</li>
+        </ul>
+        <h4>Table Actions</h4>
+        <ul>
+            <li>Click table <em>ellipsis</em> to open table menu.</li>
+            <li>Add/Delete row or column relative to the selected cell.</li>
+            <li>Convert table layout (single column / single row / N columns).</li>
+        </ul>
+        <h4>TOC</h4>
+        <ul>
+            <li>TOC auto-generates from headings `h1`–`h4`.</li>
+            <li>TOC shows hierarchical numbering and previews for images/tables.</li>
+        </ul>
+    </div>
+</div>
 
 <script type="module" src="script.js"></script>
 </body>
