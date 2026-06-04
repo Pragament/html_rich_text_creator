@@ -23,6 +23,7 @@ body {
 /* Table of Contents Sidebar */
 .toc-sidebar {
     width: 300px;
+    min-width: 220px;
     background: white;
     border-radius: 28px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
@@ -30,6 +31,29 @@ body {
     flex-direction: column;
     overflow: hidden;
     flex-shrink: 0;
+}
+
+.toc-resizer {
+    width: 10px;
+    cursor: col-resize;
+    background: transparent;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.toc-resizer::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 50%;
+    width: 2px;
+    background: rgba(148, 163, 184, 0.45);
+    transform: translateX(-50%);
+    border-radius: 4px;
+}
+.toc-resizer:hover::before {
+    background: #64748b;
 }
 
 .toc-header {

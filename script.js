@@ -6,6 +6,8 @@ const headingSelect = document.getElementById('headingSelect');
 const templateSelect = document.getElementById('templateSelect');
 const selectionMenu = document.getElementById('selectionMenu');
 const tableMenu = document.getElementById('tableMenu');
+const tocResizer = document.getElementById('tocResizer');
+const tocSidebar = document.querySelector('.toc-sidebar');
 let savedSelectionRange = null;
 let longPressTimer = null;
 
@@ -40,7 +42,7 @@ const documentTemplates = {
         `
     },
     'question-paper-toc': {
-        label: 'Question Paper TOC',
+        label: 'Question Paper TOC - Options 4 Columns',
         html: `
             <h1>Subject1</h1>
             <h2>Question1</h2>
@@ -79,6 +81,92 @@ const documentTemplates = {
                     <td>optionC</td>
                     <td>optionD</td>
                 </tr>
+            </table>
+        `
+    },
+    'question-paper-toc-2col-options': {
+        label: 'Question Paper TOC - Options 2 Columns',
+        html: `
+            <h1>Subject1</h1>
+            <h2>Question1</h2>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                </tr>
+                <tr>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
+            <h2>Question2</h2>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                </tr>
+                <tr>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
+            <h1>Subject2</h1>
+            <h2>Question1</h2>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                </tr>
+                <tr>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
+            <h2>Question2</h2>
+            <table>
+                <tr>
+                    <td>optionA</td>
+                    <td>optionB</td>
+                </tr>
+                <tr>
+                    <td>optionC</td>
+                    <td>optionD</td>
+                </tr>
+            </table>
+        `
+    },
+    'question-paper-toc-1col-options': {
+        label: 'Question Paper TOC - Options 1 Column',
+        html: `
+            <h1>Subject1</h1>
+            <h2>Question1</h2>
+            <table>
+                <tr><td>optionA</td></tr>
+                <tr><td>optionB</td></tr>
+                <tr><td>optionC</td></tr>
+                <tr><td>optionD</td></tr>
+            </table>
+            <h2>Question2</h2>
+            <table>
+                <tr><td>optionA</td></tr>
+                <tr><td>optionB</td></tr>
+                <tr><td>optionC</td></tr>
+                <tr><td>optionD</td></tr>
+            </table>
+            <h1>Subject2</h1>
+            <h2>Question1</h2>
+            <table>
+                <tr><td>optionA</td></tr>
+                <tr><td>optionB</td></tr>
+                <tr><td>optionC</td></tr>
+                <tr><td>optionD</td></tr>
+            </table>
+            <h2>Question2</h2>
+            <table>
+                <tr><td>optionA</td></tr>
+                <tr><td>optionB</td></tr>
+                <tr><td>optionC</td></tr>
+                <tr><td>optionD</td></tr>
             </table>
         `
     },
@@ -175,6 +263,33 @@ function updateHeadingDropdownFromSelection() {
     else if (tag === 'h4') headingSelect.value = 'H4';
     else headingSelect.value = 'p';
 }
+
+function startSidebarResize(e) {
+    if (!tocSidebar) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = tocSidebar.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(moveEvent) {
+        const currentX = moveEvent.clientX;
+        const nextWidth = Math.max(220, Math.min(600, startWidth + currentX - startX));
+        tocSidebar.style.width = `${nextWidth}px`;
+    }
+
+    function stopResize() {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', stopResize);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    }
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', stopResize);
+}
+
+tocResizer?.addEventListener('pointerdown', startSidebarResize);
 
 headingSelect.addEventListener('change', (e) => {
     const val = e.target.value;
