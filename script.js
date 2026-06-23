@@ -697,7 +697,32 @@ async function convertDocxToHtml(file) {
         throw new Error('mammoth.js not available');
     }
     const result = await mammoth.convertToHtml({ arrayBuffer });
-    return result.value || '';
+
+const hasEquation =
+    result.messages.some(msg =>
+        msg.message.toLowerCase().includes("unrecognised") ||
+        msg.message.toLowerCase().includes("math")
+    );
+
+if (hasEquation) {
+    alert(
+        "Warning: This DOCX may contain mathematical equations that cannot be fully imported."
+    );
+}
+
+return result.value || "";
+
+console.log("Messages:", result.messages);
+console.log("HTML:", result.value);
+
+// Save generated HTML as a file
+const blob = new Blob([result.value], { type: "text/html" });
+const a = document.createElement("a");
+a.href = URL.createObjectURL(blob);
+a.download = "converted.html";
+a.click();
+
+return result.value || "";
 }
 
 importMergeBtn?.addEventListener('click', async () => {
