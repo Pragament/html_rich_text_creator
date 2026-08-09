@@ -1455,3 +1455,36 @@ draftsSearch?.addEventListener('input', renderDraftsList);
 draftsSortBy?.addEventListener('change', renderDraftsList);
 document.addEventListener('click', (e) => { if (!draftsModal) return; if (draftsModal.getAttribute('aria-hidden') === 'true') return; if (e.target === draftsModal || draftsModal.contains(e.target) || e.target === draftsBtn) return; closeDraftsModal(); });
 window.addEventListener('load', () => { const drafts = getDrafts(); if (drafts.length > 0) { const recent = drafts.sort((a, b) => b.timestamp - a.timestamp)[0]; const urlParams = new URLSearchParams(window.location.search); if (urlParams.get('skipAutoLoad') !== '1') { editor.innerHTML = recent.html; renderTOC(); enhanceImages(); enhanceTables(); updateStatus(`Auto-loaded: ${recent.name}`, false); } } });
+
+// --- AUTO-SAVE CORE ---
+const CURRENT_DRAFT_KEY = 'active_editor_draft';
+
+// Save the editor's current HTML content to localStorage whenever the user types
+editor.addEventListener('input', () => {
+    localStorage.setItem(CURRENT_DRAFT_KEY, editor.innerHTML);
+});
+
+// Update the existing load listener to prioritize the active draft if it exists
+window.addEventListener('load', () => {
+    const savedDraft = localStorage.getItem(CURRENT_DRAFT_KEY);
+    
+    // If we have an active session draft, restore it
+    if (savedDraft) {
+        editor.innerHTML = savedDraft;
+        renderTOC();
+        enhanceImages();
+        enhanceTables();
+        updateStatus('Restored active session', false);
+    } else {
+        // Fallback to the existing logic (loading the most recent saved draft)
+        const drafts = getDrafts();
+        if (drafts.length > 0) {
+            const recent = drafts.sort((a, b) => b.timestamp - a.timestamp)[0];
+            editor.innerHTML = recent.html;
+            renderTOC();
+            enhanceImages();
+            enhanceTables();
+            updateStatus(`Auto-loaded: ${recent.name}`, false);
+        }
+    }
+});
