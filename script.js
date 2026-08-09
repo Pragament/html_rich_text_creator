@@ -866,6 +866,63 @@ function createImageResizer(img) {
     return wrapper;
 }
 
+// Listen for table keyboard shortcuts inside the application
+document.addEventListener('keydown', (e) => {
+    // We only care about keyboard actions if Ctrl+Alt (or Cmd+Alt on Mac) is held down
+    if (!e.ctrlKey || !e.altKey) return;
+
+    // 1. Check if the user's cursor is currently inside a table cell
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    
+    const activeElement = selection.anchorNode.parentElement;
+    const cell = activeElement.closest('td, th');
+    
+    // If the cursor isn't inside a table cell, ignore the shortcut
+    if (!cell) return;
+    
+    const row = cell.parentElement;
+    const table = row.parentElement.closest('table'); // Find parent table
+    if (!table) return;
+
+    // Get the exact row and column numerical indexes of the active cell
+    const rowIndex = row.rowIndex;
+    const colIndex = cell.cellIndex;
+
+    // 2. Intercept specific Key Codes and route them to your functions
+    switch (e.key) {
+        case 'ArrowDown': // Ctrl + Alt + ArrowDown -> Add row below
+            e.preventDefault();
+            addTableRow(table, rowIndex + 1);
+            break;
+            
+        case 'ArrowUp': // Ctrl + Alt + ArrowUp -> Add row above
+            e.preventDefault();
+            addTableRow(table, rowIndex);
+            break;
+            
+        case 'ArrowRight': // Ctrl + Alt + ArrowRight -> Add column right
+            e.preventDefault();
+            addTableColumn(table, colIndex + 1);
+            break;
+            
+        case 'ArrowLeft': // Ctrl + Alt + ArrowLeft -> Add column left
+            e.preventDefault();
+            addTableColumn(table, colIndex);
+            break;
+            
+        case 'Backspace': // Ctrl + Alt + Backspace -> Delete current row
+            e.preventDefault();
+            deleteTableRow(table, rowIndex);
+            break;
+            
+        case 'Delete': // Ctrl + Alt + Delete -> Delete current column
+            e.preventDefault();
+            deleteTableColumn(table, colIndex);
+            break;
+    }
+});
+
 function enhanceImages(root = editor) {
     root.querySelectorAll('img:not([data-image-enhanced])').forEach((img) => {
         const parent = img.parentNode;
@@ -957,6 +1014,7 @@ function addTableRow(table, atIndex) {
     renderTOC();
     updateStatus('Row added', false);
 }
+
 
 function deleteTableRow(table, atIndex) {
     if (table.rows.length <= 1) { updateStatus('Cannot delete the last row', true); return; }
