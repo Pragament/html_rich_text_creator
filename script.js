@@ -9,6 +9,15 @@ const selectionMenu = document.getElementById('selectionMenu');
 const tableMenu = document.getElementById('tableMenu');
 const tocResizer = document.getElementById('tocResizer');
 const tocSidebar = document.querySelector('.toc-sidebar');
+// Load and apply the saved sidebar width if it exists
+if (tocSidebar) {
+    const savedWidth = localStorage.getItem('sidebarWidth');
+    if (savedWidth) {
+        // Enforce the 220px - 600px bounds specified in the README
+        const constrainedWidth = Math.max(220, Math.min(600, parseInt(savedWidth, 10)));
+        tocSidebar.style.width = `${constrainedWidth}px`;
+    }
+}
 let savedSelectionRange = null;
 let longPressTimer = null;
 
@@ -284,6 +293,8 @@ function startSidebarResize(e) {
         document.removeEventListener('pointerup', stopResize);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+        // Save the final width to local storage when the drag ends
+        localStorage.setItem('sidebarWidth', tocSidebar.offsetWidth);
     }
 
     document.addEventListener('pointermove', onMove);
