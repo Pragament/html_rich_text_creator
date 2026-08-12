@@ -692,12 +692,144 @@ importModalClose?.addEventListener('click', closeImportModal);
 importCancelBtn?.addEventListener('click', () => { importFiles = []; importDocxInput.value = ''; closeImportModal(); });
 
 async function convertDocxToHtml(file) {
-    const arrayBuffer = await file.arrayBuffer();
     if (typeof mammoth === 'undefined' || !mammoth.convertToHtml) {
         throw new Error('mammoth.js not available');
     }
-    const result = await mammoth.convertToHtml({ arrayBuffer });
-    return result.value || '';
+    
+    let arrayBuffer = await file.arrayBuffer();
+
+    if (typeof JSZip !== 'undefined') {
+        try {
+            const zip = await JSZip.loadAsync(file);
+            const docXmlText = await zip.file("word/document.xml").async("text");
+            
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(docXmlText, "application/xml");
+            
+            const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+            // Helper to build a proper native Word Text Run (<w:r>) with support for styles
+            function createWordRun(text, scriptType = null) {
+                const rNode = xmlDoc.createElementNS(WORD_NS, "w:r");
+                
+                // If it needs superscript or subscript alignment attributes
+                if (scriptType) {
+                    const rPrNode = xmlDoc.createElementNS(WORD_NS, "w:rPr");
+                    const vaNode = xmlDoc.createElementNS(WORD_NS, "w:vertAlign");
+                    vaNode.setAttributeNS(WORD_NS, "w:val", scriptType);
+                    rPrNode.appendChild(vaNode);
+                    rNode.appendChild(rPrNode);
+                }
+                
+                const tNode = xmlDoc.createElementNS(WORD_NS, "w:t");
+                tNode.textContent = text;
+                // Ensure spaces around math operators don't get trimmed by the parser
+                tNode.setAttribute("xml:space", "preserve");
+                rNode.appendChild(tNode);
+                return rNode;
+            }
+
+            // Flattens structured equation blocks dynamically into standard layout sequences
+            function processMathNode(mathNode) {
+                const fragment = xmlDoc.createDocumentFragment();
+
+                function traverse(node) {
+                    if (!node) return;
+                    let localName = node.localName;
+
+                    // A. Handle Fractions (<m:f>) -> Num / Den
+                    if (localName === "f") {
+                        const num = node.getElementsByTagNameNS("*", "num")[0];
+                        const den = node.getElementsByTagNameNS("*", "den")[0];
+                        
+                        traverse(num);
+                        fragment.appendChild(createWordRun("/"));
+                        traverse(den);
+                        return;
+                    }
+
+                    // B. Handle Superscripts (<m:sSup>) -> Base + Native Word Super Run
+                    if (localName === "sSup") {
+                        const base = node.getElementsByTagNameNS("*", "e")[0];
+                        const sup = node.getElementsByTagNameNS("*", "sup")[0];
+                        
+                        traverse(base);
+                        fragment.appendChild(createWordRun(sup.textContent.trim(), "superscript"));
+                        return;
+                    }
+
+                    // C. Handle Subscripts (<m:sSub>) -> Base + Native Word Sub Run
+                    if (localName === "sSub") {
+                        const base = node.getElementsByTagNameNS("*", "e")[0];
+                        const sub = node.getElementsByTagNameNS("*", "sub")[0];
+                        
+                        traverse(base);
+                        fragment.appendChild(createWordRun(sub.textContent.trim(), "subscript"));
+                        return;
+                    }
+
+                    // D. Handle Delimiters/Brackets (<m:d>)
+                    if (localName === "d") {
+                        fragment.appendChild(createWordRun("["));
+                        for (let child of Array.from(node.childNodes)) { traverse(child); }
+                        fragment.appendChild(createWordRun("]"));
+                        return;
+                    }
+
+                    // E. Literal Text Content (<m:t>)
+                    if (localName === "t") {
+                        let txt = node.textContent
+                            .replace(/pi/gi, "π")
+                            .replace(/theta/gi, "θ");
+                        fragment.appendChild(createWordRun(txt));
+                        return;
+                    }
+
+                    for (let child of Array.from(node.childNodes)) {
+                        traverse(child);
+                    }
+                }
+
+                traverse(mathNode);
+                return fragment;
+            }
+
+            const mathElements = Array.from(xmlDoc.getElementsByTagNameNS("*", "oMath"));
+            
+            mathElements.forEach(mathEl => {
+                const reconstructedRuns = processMathNode(mathEl);
+                if (reconstructedRuns.childNodes.length > 0) {
+                    // Replace the equation structure wrapper completely with our legal Word elements
+                    mathEl.parentNode.replaceChild(reconstructedRuns, mathEl);
+                }
+            });
+            
+            const serializer = new XMLSerializer();
+            const updatedXmlText = serializer.serializeToString(xmlDoc);
+            
+            zip.file("word/document.xml", updatedXmlText);
+            arrayBuffer = await zip.generateAsync({ type: "arraybuffer" });
+            
+        } catch (xmlError) {
+            console.error("Dynamic structural math processing error:", xmlError);
+        }
+    }
+
+    const options = {
+        styleMap: [
+            "sup => sup",
+            "sub => sub"
+        ]
+    };
+
+    const result = await mammoth.convertToHtml({ arrayBuffer }, options);
+    let htmlContent = result.value || '';
+
+    // Standard baseline typographic corrections for degrees
+    htmlContent = htmlContent.replace(/40<sup>0<\/sup>/g, "40°");
+    htmlContent = htmlContent.replace(/40<sup>o<\/sup>/g, "40°");
+
+    return htmlContent;
 }
 
 importMergeBtn?.addEventListener('click', async () => {
